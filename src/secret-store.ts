@@ -109,11 +109,15 @@ export async function readSecret(): Promise<string | undefined> {
     const r = await run("secret-tool", ["lookup", "service", SERVICE, "account", ACCOUNT]);
     if (r.code === 0 && r.stdout.trim()) return r.stdout.trim();
   }
+  let fromFile: string | undefined;
   try {
-    return (await readFile(TOKEN_FILE, "utf8")).trim() || undefined;
+    fromFile = (await readFile(TOKEN_FILE, "utf8")).trim() || undefined;
   } catch {
     return undefined;
   }
+  // A keyring became available since the token was saved to a file: move it there.
+  if (fromFile && b !== "file" && (await saveSecret(fromFile)) !== "file") await rm(TOKEN_FILE, { force: true });
+  return fromFile;
 }
 
 export async function deleteSecret(): Promise<void> {

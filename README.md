@@ -73,7 +73,7 @@ Then connect once with `npx -y beeper-mcp-addon login`, or just use a tool: Beep
 ## Security
 
 - **You approve access in Beeper.** `login` uses Beeper's own OAuth screen (with PKCE); nothing is copied by hand. Beeper's approval screen decides the access level (read only, or read + write to send).
-- **The token stays in your system's secret store:** macOS Keychain, Windows DPAPI (encrypted for your user), or the Linux keyring (GNOME Keyring / KWallet via `secret-tool`). Without a keyring, it falls back to a file readable only by you — the same way Claude Code stores its own credentials on Linux. It is never written to MCP client configs, and never passed on a command line.
+- **The token stays in your system's secret store:** macOS Keychain, Windows DPAPI (encrypted for your user), or the Linux keyring (GNOME Keyring / KWallet via `secret-tool`). Without a keyring, it falls back to a file readable only by you — the same way Claude Code stores its own credentials on Linux. If a keyring shows up later, the token moves into it automatically and the file is deleted. It is never written to MCP client configs, and never passed on a command line.
 - **Everything is local.** The server only talks to Beeper Desktop on `localhost`.
 - **Sending is explicit.** `send_file`, `start_chat` and `delete_message` act on your behalf; keep your client's per-call approval on.
 - `npx -y beeper-mcp-addon status` shows where the token lives and whether it's valid; `logout` revokes and deletes it.
