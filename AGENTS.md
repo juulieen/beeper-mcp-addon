@@ -40,6 +40,7 @@ The `pre-commit` hook (`scripts/hooks/`, enabled by `npm install`) runs `check` 
 6. **Tests and live tests never touch the user's real data**: fake home dir, `BEEPER_ADDON_TEST_SERVICE` for the keychain, "Note to self" only.
 7. **Every tool, option and env var is documented** in the README (checked), the tool's own description, and `manifest.json`.
 8. The README never contains a real version number (it would go stale).
+9. **Security fixes are disclosed quietly.** Commit messages, release notes, the npm deprecation message and the update notice say "security fix, update recommended" and name the affected tool at most — never how to exploit it (no example payload, no "a sender could…"). Details go in a GitHub security advisory, published only once most users have updated. Vulnerability reports come in privately (`SECURITY.md`), never in public issues.
 
 ## Beeper API pitfalls
 
