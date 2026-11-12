@@ -4,7 +4,7 @@
   "display_name": "Beeper MCP Addon",
   "version": "0.2.0",
   "description": "Files and new conversations for Beeper's MCP: download and send attachments, find contacts, start chats.",
-  "long_description": "Unofficial companion to Beeper Desktop's built-in MCP server. Adds download_attachment, send_file (with automatic video conversion when ffmpeg is installed), search_contacts, start_chat and delete_message on top of the local Beeper Client API. On first use it opens Beeper so you can approve access; the token is kept in your system keychain.",
+  "long_description": "Unofficial companion to Beeper Desktop's built-in MCP server. Adds download_attachment, send_file (with automatic video conversion when ffmpeg is installed), search_contacts, start_chat, delete_message and wait_for_message on top of the local Beeper Client API. On first use it opens Beeper so you can approve access; the token is kept in your system keychain.",
   "author": {
     "name": "juulieen",
     "url": "https://github.com/juulieen"
@@ -51,6 +51,10 @@
     {
       "name": "start_chat",
       "description": "Open a direct chat with someone and return its chatID"
+    },
+    {
+      "name": "wait_for_message",
+      "description": "Wait for an incoming message (e.g. a reply) instead of polling"
     },
     {
       "name": "delete_message",

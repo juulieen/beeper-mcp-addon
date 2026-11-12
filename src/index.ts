@@ -8,6 +8,7 @@
  *   - send_file: send a local file to any chat
  *   - search_contacts / start_chat: reach people you have no conversation with yet
  *   - delete_message: delete (unsend) a message
+ *   - wait_for_message: wait for an incoming message (the `watch` command does the same in the background)
  *
  * Run it alongside the official Beeper MCP, not instead of it.
  */
@@ -24,10 +25,14 @@ import { BASE_URL, NO_TOKEN_HELP, backend, describeBackend, getToken, login, log
 import { install } from "./install.js";
 import { convertVideo, videoProblems } from "./video.js";
 import { VERSION, updateNotice } from "./update.js";
+import { createClient } from "./listen.js";
 
 // CLI subcommands. With no subcommand, run the MCP server on stdio.
 const command = process.argv[2];
-if (command && command !== "serve") {
+if (command === "watch") {
+  await import("./watch.js");
+  await new Promise(() => {}); // watch runs until stopped; never start the MCP server below
+} else if (command && command !== "serve") {
   try {
     if (command === "login") {
       const readOnly = process.argv.includes("--read-only");
@@ -59,8 +64,7 @@ if (command && command !== "serve") {
   login [--read-only] Approve access in Beeper; the token goes to ${describeBackend(await backend())}
   logout              Revoke and delete the saved token
   status              Show which token is used and whether it is valid
-
-Related: beeper-watch --help`);
+  watch [options]     Print incoming messages in real time, one JSON line each (watch --help)`);
       process.exit(command === "help" || command === "--help" || command === "-h" ? 0 : 1);
     }
     process.exit(0);
@@ -162,7 +166,24 @@ const fail = (err: unknown) => ({
   content: [{ type: "text" as const, text: err instanceof Error ? err.message : String(err) }],
 });
 
-const server = new McpServer({ name: "beeper-mcp-addon", version: VERSION });
+// How to run `watch` the same way this server was started (npx package, source checkout or .mcpb bundle).
+const quote = (a: string) => (/[\s"]/.test(a) ? JSON.stringify(a) : a);
+const WATCH_CMD = /[\\/]_npx[\\/]/.test(process.argv[1] ?? "")
+  ? `npx -y beeper-mcp-addon@${VERSION} watch`
+  : `${quote(process.execPath)} ${quote(process.argv[1] ?? "dist/index.js")} watch`;
+const server = new McpServer(
+  { name: "beeper-mcp-addon", version: VERSION },
+  {
+    instructions:
+      "Companion to the official Beeper MCP: files (download_attachment, send_file), new chats (search_contacts, start_chat) " +
+      "and delete_message. Tools that send or delete act on the user's behalf: confirm with the user first.\n\n" +
+      "Waiting for a reply or an incoming message: never poll Beeper's database files or re-list messages in a loop.\n" +
+      `- If you can run a background command that wakes you on each output line (e.g. Claude Code's Monitor tool), run: ` +
+      `${WATCH_CMD} --chat <chatID> [--from <name>] --since <ISO time of your last message> --once\n` +
+      "  It prints one JSON line when a matching message arrives, then exits. Without --once it keeps watching.\n" +
+      "- Otherwise call wait_for_message, which blocks until a message arrives or the timeout is reached.",
+  },
+);
 
 // Every tool result may carry a one-time update notice (checked only when a tool is used).
 const registerTool = server.registerTool.bind(server);
@@ -372,6 +393,49 @@ server.registerTool(
         network: chat.network,
         type: chat.type,
       });
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+server.registerTool(
+  "wait_for_message",
+  {
+    title: "Wait for an incoming message",
+    description:
+      "Block until a new message arrives (optionally in one chat and/or from one sender), then return it. " +
+      "Use it to wait for a reply instead of polling. Pass `since` (e.g. the time of your last message) so a reply " +
+      "that arrived just before this call is returned immediately. Returns status \"timeout\" if nothing came. " +
+      `For waits longer than a few minutes, prefer the background command: ${WATCH_CMD} --chat <chatID> --once`,
+    inputSchema: {
+      chatID: z.string().optional().describe("Only this chat (chat ID or local chat ID). Default: any chat"),
+      from: z.string().optional().describe("Only senders whose name or ID contains this text"),
+      since: z.string().optional().describe("ISO time: also return messages already received after it (needs chatID)"),
+      timeoutSeconds: z.number().int().min(5).max(1800).optional().describe("How long to wait (default 300)"),
+      includeOwn: z.boolean().optional().describe("Also return messages sent by the user (default false)"),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  async ({ chatID, from, since, timeoutSeconds = 300, includeOwn = false }) => {
+    try {
+      const client = createClient(await token());
+      const filter = { from, includeOwn };
+      const subscribed = await client.resolveChats(chatID ? [chatID] : undefined);
+      if (since) {
+        const t = new Date(since);
+        if (Number.isNaN(+t)) throw new BeeperError(`since: not a date: ${since}`);
+        if (!chatID) throw new BeeperError("since needs chatID");
+        const already = await client.recentMessages(subscribed, t, filter);
+        if (already.length) return ok({ status: "message", message: already[0], more: already.length - 1 });
+      }
+      const message = await new Promise<unknown>((resolve) => {
+        const timer = setTimeout(() => (listener.close(), resolve(undefined)), timeoutSeconds * 1000);
+        const listener = client.listen(subscribed, filter, {
+          onMessage: (m) => (clearTimeout(timer), listener.close(), resolve(m)),
+        });
+      });
+      return ok(message ? { status: "message", message } : { status: "timeout", waitedSeconds: timeoutSeconds });
     } catch (err) {
       return fail(err);
     }

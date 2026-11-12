@@ -9,7 +9,7 @@ Beeper Desktop ships a built-in MCP server, so an AI assistant can search and se
 - It only handles **text**: the assistant can see that a message holds a video, but it can't open it, and it can't send a photo or a PDF.
 - It can only write in **existing** conversations. To message someone new, you have to send the first message yourself.
 
-The Beeper Client API that runs alongside it already supports both. This small MCP server exposes them as five tools:
+The Beeper Client API that runs alongside it already supports both. This small MCP server exposes them as six tools:
 
 | Tool | What it does |
 |---|---|
@@ -18,6 +18,7 @@ The Beeper Client API that runs alongside it already supports both. This small M
 | `search_contacts` | Finds people on an account (WhatsApp, Signal…), including ones you've never chatted with; phone numbers, emails and @usernames are looked up exactly |
 | `start_chat` | Opens a direct chat with someone and returns its `chatID`, reusing the existing chat if there is one |
 | `delete_message` | Deletes (unsends) a message, for everyone when the network allows it |
+| `wait_for_message` | Waits for an incoming message (a reply, say) and returns it, so the assistant doesn't have to poll |
 
 It runs **next to** the official Beeper MCP, not instead of it. Keep using the official server for search, chats and text messages.
 
@@ -132,6 +133,10 @@ Optional `outputPath` chooses where to save it. Returns `{ path, fileName, mimeT
 
 `accountID` plus one of `userID` (from `search_contacts`), `phoneNumber`, `username` or `email`. Returns the `chatID` to use with `send_message` or `send_file`. If a network refuses to create an empty chat, pass `messageText`: it becomes the first message and is sent right away.
 
+### `wait_for_message`
+
+Optional `chatID`, `from` (part of the sender's name or ID), `since` (ISO time, usually that of your last message: a reply that arrived just before the call is returned right away) and `timeoutSeconds` (default 300, max 1800). Returns `{ status: "message", message }` or `{ status: "timeout" }`. For long waits, the `watch` command below is better: it doesn't hold a tool call open.
+
 ### `delete_message`
 
 `chatID`, `messageID`, optional `forEveryone` (default `true`). Most networks only let you delete your own, recent messages. It needs the final message ID: the `pendingMessageID` returned by `send_file` can't be deleted until the message is sent.
@@ -148,12 +153,12 @@ The assistant searches with the official Beeper MCP, calls `download_attachment`
 
 `start_chat` with the phone number, then `send_file` on the returned `chatID`. No need to open the conversation by hand first.
 
-## Real-time: `beeper-watch`
+## Real-time: `watch`
 
-MCP tools can only be called, so an assistant never learns on its own that someone replied. The package also ships a small command that listens to Beeper's WebSocket and prints one JSON line per incoming message:
+MCP tools only answer when called, so an assistant never learns on its own that someone replied. `watch` listens to Beeper's WebSocket and prints one JSON line per incoming message:
 
 ```bash
-npx -p beeper-mcp-addon beeper-watch --chat 22565 --once
+npx -y beeper-mcp-addon watch --chat 22565 --since 2026-11-12T10:00:00Z --once
 # {"event":"message","chat":"Pierre","sender":"Pierre","text":"Ok pour samedi !",...}
 ```
 
@@ -161,11 +166,12 @@ npx -p beeper-mcp-addon beeper-watch --chat 22565 --once
 |---|---|
 | `--chat <id>` | Only this chat (chat ID or local chat ID). Repeatable. Default: all chats |
 | `--from <text>` | Only senders whose name or ID contains `<text>` |
+| `--since <time>` | First print messages already received after this ISO time (with `--chat`), so a reply sent just before isn't missed |
 | `--once` | Exit after the first matching message |
 | `--include-own` | Also print your own messages (skipped by default) |
 | `--token-file <path>` | Read the token from this file |
 
-Agents that can be woken by a command's output can use it to wait for a reply. In Claude Code, run it with the **Monitor** tool: each line wakes the assistant, and `--once` ends the watch after the reply. A `read` token is enough.
+Agents that can be woken by a command's output can use it to wait for a reply. In Claude Code, run it with the **Monitor** tool: each line wakes the assistant, and `--once` ends the watch after the reply. The server's MCP instructions tell assistants exactly this, with the right command for how it was installed. A `read` token is enough. The same command is also installed as `beeper-watch`.
 
 If the connection drops, it prints `{"event":"disconnected",...}` and reconnects. Beeper does not replay messages sent in the meantime, so re-read the chat after a disconnect.
 
