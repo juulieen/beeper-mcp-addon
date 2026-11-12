@@ -1,0 +1,45 @@
+{
+  "name": "beeper-files-mcp",
+  "version": "0.1.0",
+  "description": "MCP server adding file download/upload tools to Beeper Desktop (companion to the built-in Beeper MCP)",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "beeper",
+    "mcp",
+    "model-context-protocol",
+    "whatsapp",
+    "attachments",
+    "claude"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  },
+  "bin": {
+    "beeper-files-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "author": "juulieen",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/juulieen/beeper-files-mcp.git"
+  }
+}
