@@ -34,6 +34,6 @@ jobs:
       - name: Attach the .mcpb to the GitHub release
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
-          gh release upload "$GITHUB_REF_NAME" ../beeper-mcp-addon.mcpb --clobber
+          gh release upload "$GITHUB_REF_NAME" beeper-mcp-addon.mcpb --clobber
         env:
           GH_TOKEN: ${{ github.token }}
