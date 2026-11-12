@@ -86,6 +86,16 @@ cd beeper-mcp-addon && npm install && npm run build
 node dist/index.js install --local   # clients run this checkout, not the npm package
 ```
 
+## Updates
+
+**Nothing updates on its own.** `install` writes the exact version (`beeper-mcp-addon@0.1.0`) into each client's config, so a new release never runs on your machine before you've chosen to take it.
+
+When you use one of the tools and a newer version exists, the first tool result of that session carries a short notice for your assistant: the new version, its release notes and the command to update. Your assistant tells you; you decide. The check is a plain request to the public npm and GitHub APIs, made at most once a day and only when a tool is actually used. Nothing about you is sent. Turn it off with `BEEPER_ADDON_NO_UPDATE_CHECK=1`.
+
+To update: `npx -y beeper-mcp-addon@<version> install`. For Claude Desktop, open the new `.mcpb` from the [releases](https://github.com/juulieen/beeper-mcp-addon/releases).
+
+There is no telemetry: the addon never reports usage or installs anywhere.
+
 ## Configuration
 
 | Variable | Default | |
@@ -94,6 +104,7 @@ node dist/index.js install --local   # clients run this checkout, not the npm pa
 | `BEEPER_URL` | `http://localhost:23373` | Base URL of the Beeper Client API |
 | `BEEPER_TOKEN_FILE` | — | Force a plain token file instead of the system secret store |
 | `BEEPER_DOWNLOAD_DIR` | `<tmp>/beeper-mcp-addon` | Where downloads go when no `outputPath` is given |
+| `BEEPER_ADDON_NO_UPDATE_CHECK` | — | Set to `1` to never check for a new version |
 | `BEEPER_FFMPEG` | `ffmpeg` on `PATH` | ffmpeg used to fix videos before sending (ffprobe is looked up next to it) |
 
 ## Tools

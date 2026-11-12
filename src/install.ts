@@ -8,6 +8,7 @@ import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir, platform } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { VERSION } from "./update.js";
 import { createInterface } from "node:readline/promises";
 
 const NAME = "beeper-mcp-addon";
@@ -23,8 +24,8 @@ const LOCAL = process.argv.includes("--local");
 const COMMAND = LOCAL
   ? { command: process.execPath, args: [join(dirname(fileURLToPath(import.meta.url)), "index.js")] }
   : WIN
-    ? { command: "cmd", args: ["/c", "npx", "-y", NAME] }
-    : { command: "npx", args: ["-y", NAME] };
+    ? { command: "cmd", args: ["/c", "npx", "-y", `${NAME}@${VERSION}`] }
+    : { command: "npx", args: ["-y", `${NAME}@${VERSION}`] }; // exact version: a new release never runs unseen
 
 /** Per-OS user config directory of an Electron app (Claude Desktop, VS Code…). */
 const appConfig = (app: string) => (MAC ? join(HOME, "Library", "Application Support", app) : WIN ? join(APPDATA, app) : join(XDG, app));

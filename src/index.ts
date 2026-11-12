@@ -23,6 +23,7 @@ import { z } from "zod";
 import { BASE_URL, NO_TOKEN_HELP, backend, describeBackend, getToken, login, logout, status } from "./auth.js";
 import { install } from "./install.js";
 import { convertVideo, videoProblems } from "./video.js";
+import { VERSION, updateNotice } from "./update.js";
 
 // CLI subcommands. With no subcommand, run the MCP server on stdio.
 const command = process.argv[2];
@@ -161,7 +162,17 @@ const fail = (err: unknown) => ({
   content: [{ type: "text" as const, text: err instanceof Error ? err.message : String(err) }],
 });
 
-const server = new McpServer({ name: "beeper-mcp-addon", version: "0.1.0" });
+const server = new McpServer({ name: "beeper-mcp-addon", version: VERSION });
+
+// Every tool result may carry a one-time update notice (checked only when a tool is used).
+const registerTool = server.registerTool.bind(server);
+server.registerTool = ((name: string, config: never, cb: (...a: never[]) => Promise<{ content: { type: "text"; text: string }[] }>) =>
+  registerTool(name, config, (async (...a: never[]) => {
+    const result = await cb(...a);
+    const notice = await updateNotice();
+    if (notice) result.content.push({ type: "text", text: notice });
+    return result;
+  }) as never)) as typeof server.registerTool;
 
 server.registerTool(
   "download_attachment",
