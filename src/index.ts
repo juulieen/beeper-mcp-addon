@@ -7,11 +7,12 @@
  *   - download_attachment: save a message attachment to disk
  *   - send_file: send a local file to any chat
  *   - search_contacts / start_chat: reach people you have no conversation with yet
+ *   - delete_message: delete (unsend) a message
  *
  * Run it alongside the official Beeper MCP, not instead of it.
  */
 import { openAsBlob } from "node:fs";
-import { copyFile, mkdir, stat } from "node:fs/promises";
+import { copyFile, mkdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -21,6 +22,7 @@ import { z } from "zod";
 
 import { BASE_URL, NO_TOKEN_HELP, backend, describeBackend, getToken, login, logout, status } from "./auth.js";
 import { install } from "./install.js";
+import { convertVideo, videoProblems } from "./video.js";
 
 // CLI subcommands. With no subcommand, run the MCP server on stdio.
 const command = process.argv[2];
@@ -100,7 +102,7 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {}
     throw new BeeperError(`Beeper API ${res.status} on ${path}: ${message}`);
   }
-  return JSON.parse(body) as T;
+  return (body ? JSON.parse(body) : {}) as T;
 }
 
 const enc = encodeURIComponent;
@@ -216,16 +218,37 @@ server.registerTool(
       text: z.string().optional().describe("Optional caption sent with the file"),
       fileName: z.string().optional().describe("File name shown to the recipient (defaults to the local name)"),
       replyToMessageID: z.string().optional().describe("Message ID to reply to"),
+      convert: z
+        .enum(["auto", "always", "never"])
+        .optional()
+        .describe(
+          "Videos only. auto (default): re-encode with ffmpeg, if installed, when the video would play badly on phones " +
+            "(HEVC, 60 fps, full-range color, rotation metadata…). always / never force it.",
+        ),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   },
-  async ({ chatID, filePath, text, fileName, replyToMessageID }) => {
+  async ({ chatID, filePath, text, fileName, replyToMessageID, convert = "auto" }) => {
     try {
-      const path = resolve(filePath);
-      const info = await stat(path).catch(() => null);
+      let path = resolve(filePath);
+      let info = await stat(path).catch(() => null);
       if (!info?.isFile()) throw new BeeperError(`File not found: ${path}`);
 
-      const name = fileName ?? basename(path);
+      let name = fileName ?? basename(path);
+      let conversion: { convertedFrom?: string; reasons?: string[]; warning?: string } = {};
+      const isVideo = (MIME_TYPES[extname(path).toLowerCase()] ?? "").startsWith("video/");
+      if (isVideo && convert !== "never") {
+        const problems = convert === "always" ? ["forced"] : await videoProblems(path);
+        if (problems === undefined) {
+          conversion.warning = "ffmpeg/ffprobe not found: sent as-is. Some phones may not play this video.";
+        } else if (problems.length) {
+          const converted = await convertVideo(path);
+          conversion = { convertedFrom: path, reasons: problems };
+          path = converted;
+          info = await stat(path);
+          name = name.replace(/\.[^.]+$/, "") + ".mp4";
+        }
+      }
       const mimeType = MIME_TYPES[extname(name).toLowerCase()] ?? MIME_TYPES[extname(path).toLowerCase()];
       const form = new FormData();
       form.append("file", await openAsBlob(path, mimeType ? { type: mimeType } : {}), name);
@@ -237,6 +260,7 @@ server.registerTool(
       });
       if (!upload.uploadID) throw new BeeperError(`Upload failed: ${upload.error ?? "no uploadID returned"}`);
 
+      if (conversion.convertedFrom) await rm(path, { force: true }); // uploaded: the converted copy is no longer needed
       const sent = await api<{ chatID: string; pendingMessageID: string }>(`/chats/${enc(chatID)}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -253,6 +277,7 @@ server.registerTool(
         fileName: name,
         mimeType: mimeType ?? upload.mimeType,
         sizeBytes: info.size,
+        ...conversion,
       });
     } catch (err) {
       return fail(err);
@@ -335,6 +360,36 @@ server.registerTool(
         network: chat.network,
         type: chat.type,
       });
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+server.registerTool(
+  "delete_message",
+  {
+    title: "Delete a message",
+    description:
+      "Delete (unsend) a message. By default it is deleted for everyone when the network allows it " +
+      "(usually only your own, recent messages). Needs the final message ID: a pendingMessageID from send_file " +
+      "only becomes deletable once the message is sent. This cannot be undone: confirm with the user first.",
+    inputSchema: {
+      chatID: z.string().describe("Chat ID (or local chat ID)"),
+      messageID: z.string().describe("ID of the message to delete"),
+      forEveryone: z.boolean().optional().describe("true (default): delete for everyone; false: only for you, when supported"),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+  },
+  async ({ chatID, messageID, forEveryone = true }) => {
+    try {
+      if (messageID.startsWith("~")) {
+        throw new BeeperError(
+          `${messageID} is a pending message ID. Wait until the message is sent, then use its final ID (list the chat's latest messages).`,
+        );
+      }
+      await api(`/chats/${enc(chatID)}/messages/${enc(messageID)}?forEveryone=${forEveryone}`, { method: "DELETE" });
+      return ok({ status: "deleted", chatID, messageID, forEveryone });
     } catch (err) {
       return fail(err);
     }

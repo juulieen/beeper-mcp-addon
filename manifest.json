@@ -4,7 +4,7 @@
   "display_name": "Beeper MCP Addon",
   "version": "0.1.0",
   "description": "Files and new conversations for Beeper's MCP: download and send attachments, find contacts, start chats.",
-  "long_description": "Unofficial companion to Beeper Desktop's built-in MCP server. Adds download_attachment, send_file, search_contacts and start_chat on top of the local Beeper Client API. On first use it opens Beeper so you can approve access; the token is kept in your system keychain.",
+  "long_description": "Unofficial companion to Beeper Desktop's built-in MCP server. Adds download_attachment, send_file (with automatic video conversion when ffmpeg is installed), search_contacts, start_chat and delete_message on top of the local Beeper Client API. On first use it opens Beeper so you can approve access; the token is kept in your system keychain.",
   "author": { "name": "juulieen", "url": "https://github.com/juulieen" },
   "repository": { "type": "git", "url": "https://github.com/juulieen/beeper-mcp-addon" },
   "homepage": "https://github.com/juulieen/beeper-mcp-addon",
@@ -23,7 +23,8 @@
     { "name": "download_attachment", "description": "Save a message attachment to disk and return its path" },
     { "name": "send_file", "description": "Send a local file to a chat" },
     { "name": "search_contacts", "description": "Find people on an account, including new contacts" },
-    { "name": "start_chat", "description": "Open a direct chat with someone and return its chatID" }
+    { "name": "start_chat", "description": "Open a direct chat with someone and return its chatID" },
+    { "name": "delete_message", "description": "Delete (unsend) a message" }
   ],
   "user_config": {
     "beeper_token": {

@@ -9,7 +9,7 @@ Beeper Desktop ships a built-in MCP server, so an AI assistant can search and se
 - It only handles **text**: the assistant can see that a message holds a video, but it can't open it, and it can't send a photo or a PDF.
 - It can only write in **existing** conversations. To message someone new, you have to send the first message yourself.
 
-The Beeper Client API that runs alongside it already supports both. This small MCP server exposes them as four tools:
+The Beeper Client API that runs alongside it already supports both. This small MCP server exposes them as five tools:
 
 | Tool | What it does |
 |---|---|
@@ -17,6 +17,7 @@ The Beeper Client API that runs alongside it already supports both. This small M
 | `send_file` | Uploads a local file and sends it to any chat, with an optional caption |
 | `search_contacts` | Finds people on an account (WhatsApp, Signal…), including ones you've never chatted with; phone numbers, emails and @usernames are looked up exactly |
 | `start_chat` | Opens a direct chat with someone and returns its `chatID`, reusing the existing chat if there is one |
+| `delete_message` | Deletes (unsends) a message, for everyone when the network allows it |
 
 It runs **next to** the official Beeper MCP, not instead of it. Keep using the official server for search, chats and text messages.
 
@@ -24,6 +25,7 @@ It runs **next to** the official Beeper MCP, not instead of it. Keep using the o
 
 - [Beeper Desktop](https://www.beeper.com/download) with its API enabled (Settings → Developers)
 - Node.js 20+ — except for the Claude Desktop bundle, which uses Claude's built-in Node
+- Optional: [ffmpeg](https://ffmpeg.org/download.html), so `send_file` can fix videos that phones play badly
 
 Works on **macOS, Windows and Linux**.
 
@@ -73,7 +75,7 @@ Then connect once with `npx -y beeper-mcp-addon login`, or just use a tool: Beep
 - **You approve access in Beeper.** `login` uses Beeper's own OAuth screen (with PKCE); nothing is copied by hand. Beeper's approval screen decides the access level (read only, or read + write to send).
 - **The token stays in your system's secret store:** macOS Keychain, Windows DPAPI (encrypted for your user), or the Linux keyring (GNOME Keyring / KWallet via `secret-tool`). Without a keyring, it falls back to a file readable only by you — the same way Claude Code stores its own credentials on Linux. It is never written to MCP client configs, and never passed on a command line.
 - **Everything is local.** The server only talks to Beeper Desktop on `localhost`.
-- **Sending is explicit.** `send_file` and `start_chat` act on your behalf; keep your client's per-call approval on.
+- **Sending is explicit.** `send_file`, `start_chat` and `delete_message` act on your behalf; keep your client's per-call approval on.
 - `npx -y beeper-mcp-addon status` shows where the token lives and whether it's valid; `logout` revokes and deletes it.
 
 ### From source
@@ -92,6 +94,7 @@ node dist/index.js install
 | `BEEPER_URL` | `http://localhost:23373` | Base URL of the Beeper Client API |
 | `BEEPER_TOKEN_FILE` | — | Force a plain token file instead of the system secret store |
 | `BEEPER_DOWNLOAD_DIR` | `<tmp>/beeper-mcp-addon` | Where downloads go when no `outputPath` is given |
+| `BEEPER_FFMPEG` | `ffmpeg` on `PATH` | ffmpeg used to fix videos before sending (ffprobe is looked up next to it) |
 
 ## Tools
 
@@ -108,6 +111,8 @@ Optional `outputPath` chooses where to save it. Returns `{ path, fileName, mimeT
 
 `chatID`, `filePath`, and optionally `text` (caption), `fileName` (name shown to the recipient) and `replyToMessageID`. Files up to 500 MB. The MIME type comes from the file extension, so videos and images show up as media rather than generic files.
 
+**Videos are fixed before sending.** Phone cameras often record videos that messaging apps play badly: HEVC, 60 fps, full-range color, rotation stored as metadata. The recipient then sees a black frame, a sideways picture, or nothing. When ffmpeg is installed, `send_file` checks each video with ffprobe and, only if needed, re-encodes it to H.264 + AAC MP4 (30 fps and 1280 px max, rotation applied). The result says what was fixed (`reasons`). Pass `convert: "never"` to send the original, or `"always"` to force it. Set `BEEPER_FFMPEG` if ffmpeg is not on your `PATH`.
+
 ### `search_contacts`
 
 `accountID` (from the official MCP's `get_accounts`), `query`, optional `limit`. Returns contact `id`, name, phone number, username, email.
@@ -116,7 +121,11 @@ Optional `outputPath` chooses where to save it. Returns `{ path, fileName, mimeT
 
 `accountID` plus one of `userID` (from `search_contacts`), `phoneNumber`, `username` or `email`. Returns the `chatID` to use with `send_message` or `send_file`. If a network refuses to create an empty chat, pass `messageText`: it becomes the first message and is sent right away.
 
-`send_file` and `start_chat` act on your behalf. Most MCP clients ask you to approve each call; keep that confirmation on.
+### `delete_message`
+
+`chatID`, `messageID`, optional `forEveryone` (default `true`). Most networks only let you delete your own, recent messages. It needs the final message ID: the `pendingMessageID` returned by `send_file` can't be deleted until the message is sent.
+
+`send_file`, `start_chat` and `delete_message` act on your behalf. Most MCP clients ask you to approve each call; keep that confirmation on.
 
 ## Example
 
@@ -151,7 +160,7 @@ If the connection drops, it prints `{"event":"disconnected",...}` and reconnects
 
 ## How it works
 
-It's about 300 lines of TypeScript that call the local Beeper Client API: `/v1/assets/download`, `/v1/assets/upload`, `/v1/chats/{chatID}/messages`, `/v1/accounts/{accountID}/contacts` and `/v1/chats/start`. Everything stays on your machine; the server only talks to Beeper Desktop on `localhost`.
+It's about 450 lines of TypeScript that call the local Beeper Client API: `/v1/assets/download`, `/v1/assets/upload`, `/v1/chats/{chatID}/messages` (send and delete), `/v1/accounts/{accountID}/contacts` and `/v1/chats/start`. Everything stays on your machine; the server only talks to Beeper Desktop on `localhost`.
 
 ## License
 
