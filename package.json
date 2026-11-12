@@ -7,7 +7,8 @@
     "build": "tsc",
     "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
-    "bundle": "rm -rf .bundle && mkdir .bundle && npm run build && cp -r dist manifest.json package.json package-lock.json README.md LICENSE .bundle/ && cd .bundle && npm ci --omit=dev --ignore-scripts && npx -y @anthropic-ai/mcpb@2.1.2 pack . ../beeper-mcp-addon.mcpb"
+    "bundle": "rm -rf .bundle && mkdir .bundle && npm run build && cp -r dist manifest.json package.json package-lock.json README.md LICENSE .bundle/ && cd .bundle && npm ci --omit=dev --ignore-scripts && npx -y @anthropic-ai/mcpb@2.1.2 pack . ../beeper-mcp-addon.mcpb",
+    "version": "node scripts/sync-version.mjs && git add server.json manifest.json"
   },
   "keywords": [
     "beeper",
