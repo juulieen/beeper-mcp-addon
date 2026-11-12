@@ -8,7 +8,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { platform } from "node:os";
 import type { AddressInfo } from "node:net";
-import { backend, deleteSecret, describe, readSecret, saveSecret } from "./secret-store.js";
+import { backend, deleteSecret, describe, lastBackendError, readSecret, saveSecret } from "./secret-store.js";
 
 export const BASE_URL = (process.env.BEEPER_URL ?? "http://localhost:23373").replace(/\/$/, "");
 
@@ -141,7 +141,9 @@ export async function login({ scope = "read write", timeoutMs = 5 * 60_000 } = {
       base_url: BASE_URL,
       created_at: new Date().toISOString(),
     };
-    const where = describe(await saveSecret(JSON.stringify(stored)));
+    const saved = await saveSecret(JSON.stringify(stored));
+    if (saved === "file" && lastBackendError()) console.error(`Note: the system secret store failed (${lastBackendError()}); using a file readable only by you.`);
+    const where = describe(saved);
     return { ...stored, where };
   } finally {
     server.close();

@@ -69,13 +69,26 @@ export async function backend(): Promise<Backend> {
   return "file";
 }
 
+let lastError: string | undefined;
+/** Why the OS store was not used on the last save (shown by `login` when it falls back to a file). */
+export const lastBackendError = () => lastError;
+
+/** `security -w` prints the secret as hex when it contains non-ASCII bytes. Our secrets are JSON ("{…"). */
+function fromKeychain(out: string): string {
+  const v = out.trim();
+  if (/^7b([0-9a-f]{2})+$/i.test(v)) return Buffer.from(v, "hex").toString("utf8");
+  return v;
+}
+
 export async function saveSecret(value: string): Promise<Backend> {
   const b = await backend();
+  lastError = undefined;
   if (b === "macos-keychain") {
     // `security -i` reads commands from stdin: the token never appears in argv.
     const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     const r = await run("security", ["-i"], `add-generic-password -U -s "${SERVICE}" -a "${ACCOUNT}" -w "${escaped}"\n`);
     if (r.code === 0 && !/error/i.test(r.stderr)) return b;
+    lastError = r.stderr.trim() || `security exited with ${r.code}`;
   } else if (b === "windows-dpapi") {
     await mkdir(CONFIG_DIR, { recursive: true });
     const r = await powershell(
@@ -84,9 +97,11 @@ export async function saveSecret(value: string): Promise<Backend> {
       value,
     );
     if (r.code === 0) return b;
+    lastError = r.stderr.trim() || `powershell exited with ${r.code}`;
   } else if (b === "secret-service") {
     const r = await run("secret-tool", ["store", "--label=Beeper token (beeper-mcp-addon)", "service", SERVICE, "account", ACCOUNT], value);
     if (r.code === 0) return b;
+    lastError = r.stderr.trim() || `secret-tool exited with ${r.code}`;
   }
   // Fallback: owner-only file.
   await mkdir(dirname(TOKEN_FILE), { recursive: true, mode: 0o700 });
@@ -99,7 +114,7 @@ export async function readSecret(): Promise<string | undefined> {
   const b = await backend();
   if (b === "macos-keychain") {
     const r = await run("security", ["find-generic-password", "-s", SERVICE, "-a", ACCOUNT, "-w"]);
-    if (r.code === 0 && r.stdout.trim()) return r.stdout.trim();
+    if (r.code === 0 && r.stdout.trim()) return fromKeychain(r.stdout);
   } else if (b === "windows-dpapi") {
     const r = await powershell(
       `if (Test-Path ${psQuote(DPAPI_FILE)}) { $s = Get-Content -Raw ${psQuote(DPAPI_FILE)} | ConvertTo-SecureString; ` +

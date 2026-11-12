@@ -18,8 +18,8 @@ test("save, read back and delete a secret in the OS store", async () => {
   const value = JSON.stringify({ access_token: 'tok-"quoted"\\-\u00e9', created_at: new Date().toISOString() });
   const where = await store.saveSecret(value);
   const expected = { darwin: "macos-keychain", win32: "windows-dpapi" }[platform()];
-  if (expected && where !== expected) console.log(`# secret store fell back to "${where}" (expected ${expected})`);
-  if (process.env.CI && expected) assert.equal(where, expected, `the ${expected} backend failed on CI`);
+  if (expected && where !== expected) console.log(`# secret store fell back to "${where}" (expected ${expected}): ${store.lastBackendError()}`);
+  if (process.env.CI && expected) assert.equal(where, expected, `the ${expected} backend failed on CI: ${store.lastBackendError()}`);
   assert.equal(await store.readSecret(), value);
   await store.deleteSecret();
   assert.equal(await store.readSecret(), undefined);
