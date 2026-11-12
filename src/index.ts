@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * beeper-files-mcp — companion MCP server for Beeper Desktop.
+ * beeper-mcp-addon — companion MCP server for Beeper Desktop.
  *
  * Beeper's built-in MCP server handles text in existing chats only. This server adds the
  * missing file tools on top of the Beeper Client API (localhost:23373):
@@ -21,11 +21,11 @@ import { z } from "zod";
 
 const BASE_URL = (process.env.BEEPER_URL ?? "http://localhost:23373").replace(/\/$/, "");
 const TOKEN = process.env.BEEPER_ACCESS_TOKEN;
-const DOWNLOAD_DIR = process.env.BEEPER_DOWNLOAD_DIR ?? join(tmpdir(), "beeper-files-mcp");
+const DOWNLOAD_DIR = process.env.BEEPER_DOWNLOAD_DIR ?? join(tmpdir(), "beeper-mcp-addon");
 
 if (!TOKEN) {
   process.stderr.write(
-    "beeper-files-mcp: BEEPER_ACCESS_TOKEN is required.\n" +
+    "beeper-mcp-addon: BEEPER_ACCESS_TOKEN is required.\n" +
       "Create one in Beeper Desktop > Settings > Developers (read + write to send files).\n",
   );
   process.exit(1);
@@ -104,7 +104,7 @@ const fail = (err: unknown) => ({
   content: [{ type: "text" as const, text: err instanceof Error ? err.message : String(err) }],
 });
 
-const server = new McpServer({ name: "beeper-files", version: "0.1.0" });
+const server = new McpServer({ name: "beeper-mcp-addon", version: "0.1.0" });
 
 server.registerTool(
   "download_attachment",

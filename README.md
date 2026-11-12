@@ -1,4 +1,6 @@
-# beeper-files-mcp
+# beeper-mcp-addon
+
+> Unofficial. Not affiliated with or endorsed by Beeper.
 
 The missing tools for [Beeper Desktop](https://www.beeper.com)'s MCP server: files and new conversations.
 
@@ -29,9 +31,9 @@ It runs **next to** the official Beeper MCP, not instead of it. Keep using the o
 ### Claude Code
 
 ```bash
-claude mcp add beeper-files \
+claude mcp add beeper-mcp-addon \
   --env BEEPER_ACCESS_TOKEN=your-token \
-  -- npx -y beeper-files-mcp
+  -- npx -y beeper-mcp-addon
 ```
 
 ### Claude Desktop, Cursor, and other MCP clients
@@ -39,9 +41,9 @@ claude mcp add beeper-files \
 ```json
 {
   "mcpServers": {
-    "beeper-files": {
+    "beeper-mcp-addon": {
       "command": "npx",
-      "args": ["-y", "beeper-files-mcp"],
+      "args": ["-y", "beeper-mcp-addon"],
       "env": { "BEEPER_ACCESS_TOKEN": "your-token" }
     }
   }
@@ -51,9 +53,9 @@ claude mcp add beeper-files \
 ### From source
 
 ```bash
-git clone https://github.com/juulieen/beeper-files-mcp
-cd beeper-files-mcp && npm install && npm run build
-# then use "command": "node", "args": ["/path/to/beeper-files-mcp/dist/index.js"]
+git clone https://github.com/juulieen/beeper-mcp-addon
+cd beeper-mcp-addon && npm install && npm run build
+# then use "command": "node", "args": ["/path/to/beeper-mcp-addon/dist/index.js"]
 ```
 
 ## Configuration
@@ -62,7 +64,7 @@ cd beeper-files-mcp && npm install && npm run build
 |---|---|---|
 | `BEEPER_ACCESS_TOKEN` | — (required) | Beeper Desktop API token |
 | `BEEPER_URL` | `http://localhost:23373` | Base URL of the Beeper Client API |
-| `BEEPER_DOWNLOAD_DIR` | `<tmp>/beeper-files-mcp` | Where downloads go when no `outputPath` is given |
+| `BEEPER_DOWNLOAD_DIR` | `<tmp>/beeper-mcp-addon` | Where downloads go when no `outputPath` is given |
 
 ## Tools
 
