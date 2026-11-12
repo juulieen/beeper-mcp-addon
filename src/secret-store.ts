@@ -14,7 +14,8 @@ import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, platform, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 
-const SERVICE = "beeper-mcp-addon";
+// Tests use their own keychain entry (BEEPER_ADDON_TEST_SERVICE) so they never touch the real token.
+const SERVICE = process.env.BEEPER_ADDON_TEST_SERVICE ?? "beeper-mcp-addon";
 const ACCOUNT = "beeper-desktop-token";
 
 export const CONFIG_DIR =

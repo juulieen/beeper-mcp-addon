@@ -68,21 +68,32 @@ try {
 const filter = { from: opts.from, includeOwn: opts["include-own"] };
 const subscribed = await client.resolveChats(opts.chat);
 const emit = (line: object) => process.stdout.write(JSON.stringify(line) + "\n");
+const printed = new Set<string>();
 const onMessage = (m: IncomingMessage) => {
+  if (printed.has(m.messageID)) return; // seen both live and in the history
+  printed.add(m.messageID);
   emit(m);
   if (opts.once) process.exit(0);
 };
 
+let since: Date | undefined;
 if (opts.since) {
-  const since = new Date(opts.since);
+  since = new Date(opts.since);
   if (Number.isNaN(+since)) throw new Error(`--since: not a date: ${opts.since}`);
   if (subscribed[0] === "*") throw new Error("--since needs --chat");
-  for (const m of await client.recentMessages(subscribed, since, filter)) onMessage(m);
 }
 
+let caughtUp = !since;
 client.listen(subscribed, filter, {
   onMessage,
-  onReady: (titles) => console.error(`beeper-watch: listening on ${titles}`),
+  onReady: async (titles) => {
+    console.error(`beeper-watch: listening on ${titles}`);
+    // History is read once listening has started, so a message can't fall in between.
+    if (!caughtUp) {
+      caughtUp = true;
+      for (const m of await client.recentMessages(subscribed, since!, filter)) onMessage(m);
+    }
+  },
   // Messages sent while disconnected are not replayed by Beeper: say so on stdout.
   onDisconnect: (d) => emit({ event: "disconnected", ...d }),
   onError: (m) => console.error(`beeper-watch: server error: ${m}`),

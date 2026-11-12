@@ -20,7 +20,8 @@ const DAY = 24 * 60 * 60 * 1000;
 
 export const VERSION: string = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8")).version;
 
-const newer = (a: string, b: string) => {
+/** True if version a is newer than b (x.y.z). */
+export const newer = (a: string, b: string) => {
   const pa = a.split(/[.-]/).map(Number);
   const pb = b.split(/[.-]/).map(Number);
   for (let i = 0; i < 3; i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0);

@@ -26,6 +26,7 @@ import { install } from "./install.js";
 import { convertVideo, videoProblems } from "./video.js";
 import { VERSION, updateNotice } from "./update.js";
 import { createClient } from "./listen.js";
+import { parseAttachmentURI } from "./media.js";
 
 // CLI subcommands. With no subcommand, run the MCP server on stdio.
 const command = process.argv[2];
@@ -136,10 +137,9 @@ async function resolveMediaURL(input: {
   index?: number;
 }): Promise<{ url: string; attachment?: Attachment }> {
   let { url, chatID, messageID, index = 0 } = input;
-  const mcpUri = url?.match(/^beeper-mcp:\/\/attachments\/([^/]+)\/([^/]+)\/(\d+)$/);
-  if (mcpUri) {
-    [chatID, messageID] = [decodeURIComponent(mcpUri[1]), decodeURIComponent(mcpUri[2])];
-    index = Number(mcpUri[3]);
+  const ref = url ? parseAttachmentURI(url) : undefined;
+  if (ref) {
+    ({ chatID, messageID, index } = ref);
     url = undefined;
   }
   if (url) return { url };
@@ -422,19 +422,13 @@ server.registerTool(
       const client = createClient(await token());
       const filter = { from, includeOwn };
       const subscribed = await client.resolveChats(chatID ? [chatID] : undefined);
+      let after: Date | undefined;
       if (since) {
-        const t = new Date(since);
-        if (Number.isNaN(+t)) throw new BeeperError(`since: not a date: ${since}`);
+        after = new Date(since);
+        if (Number.isNaN(+after)) throw new BeeperError(`since: not a date: ${since}`);
         if (!chatID) throw new BeeperError("since needs chatID");
-        const already = await client.recentMessages(subscribed, t, filter);
-        if (already.length) return ok({ status: "message", message: already[0], more: already.length - 1 });
       }
-      const message = await new Promise<unknown>((resolve) => {
-        const timer = setTimeout(() => (listener.close(), resolve(undefined)), timeoutSeconds * 1000);
-        const listener = client.listen(subscribed, filter, {
-          onMessage: (m) => (clearTimeout(timer), listener.close(), resolve(m)),
-        });
-      });
+      const message = await client.nextMessage(subscribed, filter, { since: after, timeoutMs: timeoutSeconds * 1000 });
       return ok(message ? { status: "message", message } : { status: "timeout", waitedSeconds: timeoutSeconds });
     } catch (err) {
       return fail(err);

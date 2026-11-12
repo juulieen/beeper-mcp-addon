@@ -147,5 +147,31 @@ export function createClient(token: string) {
     };
   }
 
-  return { api, resolveChats, recentMessages, listen };
+  /**
+   * The first matching message: from the live stream, or, with `since`, one already received after
+   * that time. Listening starts before the history is read, so nothing falls in between.
+   */
+  function nextMessage(subscribed: string[], f: Filter, opts: { since?: Date; timeoutMs: number }): Promise<IncomingMessage | undefined> {
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const finish = (m?: IncomingMessage, err?: unknown) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        listener.close();
+        if (err) reject(err);
+        else resolve(m);
+      };
+      const timer = setTimeout(() => finish(), opts.timeoutMs);
+      const listener = listen(subscribed, f, {
+        onMessage: (m) => finish(m),
+        onReady: () => {
+          if (!opts.since || done) return;
+          recentMessages(subscribed, opts.since, f).then((ms) => ms.length && finish(ms[0]), (err) => finish(undefined, err));
+        },
+      });
+    });
+  }
+
+  return { api, resolveChats, recentMessages, listen, nextMessage };
 }

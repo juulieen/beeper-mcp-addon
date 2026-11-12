@@ -107,6 +107,7 @@ There is no telemetry: the addon never reports usage or installs anywhere.
 | `BEEPER_DOWNLOAD_DIR` | `<tmp>/beeper-mcp-addon` | Where downloads go when no `outputPath` is given |
 | `BEEPER_ADDON_NO_UPDATE_CHECK` | — | Set to `1` to never check for a new version |
 | `BEEPER_FFMPEG` | `ffmpeg` on `PATH` | ffmpeg used to fix videos before sending (ffprobe is looked up next to it) |
+| `BEEPER_FFPROBE` | next to `BEEPER_FFMPEG`, else `ffprobe` on `PATH` | ffprobe used to check videos before sending |
 
 ## Tools
 
