@@ -19,7 +19,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-import { BASE_URL, NO_TOKEN_HELP, TOKEN_FILE, getToken, login, logout, status } from "./auth.js";
+import { BASE_URL, NO_TOKEN_HELP, backend, describeBackend, getToken, login, logout, status } from "./auth.js";
+import { install } from "./install.js";
 
 // CLI subcommands. With no subcommand, run the MCP server on stdio.
 const command = process.argv[2];
@@ -28,9 +29,17 @@ if (command && command !== "serve") {
     if (command === "login") {
       const readOnly = process.argv.includes("--read-only");
       const t = await login({ scope: readOnly ? "read" : "read write" });
-      console.log(`✅ Logged in (${t.scope}). Token saved to ${TOKEN_FILE}`);
+      console.log(`✅ Logged in (${t.scope}). Token saved in ${t.where}`);
+    } else if (command === "install" || command === "uninstall") {
+      const args = process.argv.slice(3).concat(command === "uninstall" ? ["--uninstall"] : []);
+      const { installed } = await install(args);
+      if (installed && command === "install" && !args.includes("--dry-run") && !args.includes("--no-login") && !(await getToken())) {
+        console.log("\nNow connecting to Beeper (one time)…");
+        const t = await login({ scope: args.includes("--read-only") ? "read" : "read write" });
+        console.log(`✅ Logged in (${t.scope}). Token saved in ${t.where}`);
+      }
     } else if (command === "logout") {
-      console.log((await logout()) ? `Token revoked and removed from ${TOKEN_FILE}` : "Not logged in.");
+      console.log((await logout()) ? "Token revoked and deleted." : "Not logged in.");
     } else if (command === "status") {
       const s = await status();
       if (!s.loggedIn) console.log(`Not logged in. ${NO_TOKEN_HELP}`);
@@ -40,7 +49,10 @@ if (command && command !== "serve") {
       console.log(`Usage: beeper-mcp-addon [command]
 
   (no command)        Run the MCP server on stdio (what MCP clients launch)
-  login [--read-only] Approve access in Beeper and save a token to ${TOKEN_FILE}
+  install             Add the server to every MCP client found (Claude, Cursor, VS Code, Kimi…), then log in
+                      Options: --client <id,...>  --yes  --dry-run  --no-login  --read-only
+  uninstall           Remove it from those clients
+  login [--read-only] Approve access in Beeper; the token goes to ${describeBackend(await backend())}
   logout              Revoke and delete the saved token
   status              Show which token is used and whether it is valid
 
@@ -54,12 +66,23 @@ Related: beeper-watch --help`);
   }
 }
 
-const TOKEN = await getToken();
 const DOWNLOAD_DIR = process.env.BEEPER_DOWNLOAD_DIR ?? join(tmpdir(), "beeper-mcp-addon");
 
-if (!TOKEN) {
-  process.stderr.write(`beeper-mcp-addon: ${NO_TOKEN_HELP}\n`);
-  process.exit(1);
+// No token yet? Don't fail: the first tool call opens Beeper to approve access (works in any MCP client).
+let TOKEN = await getToken();
+let pendingLogin: Promise<string> | undefined;
+async function token(): Promise<string> {
+  if (TOKEN) return TOKEN;
+  pendingLogin ??= login()
+    .then((t) => (TOKEN = t.access_token))
+    .finally(() => (pendingLogin = undefined));
+  try {
+    return await pendingLogin;
+  } catch (err) {
+    throw new BeeperError(
+      `Not connected to Beeper and the approval did not complete (${err instanceof Error ? err.message : err}). ${NO_TOKEN_HELP}`,
+    );
+  }
 }
 
 class BeeperError extends Error {}
@@ -67,7 +90,7 @@ class BeeperError extends Error {}
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE_URL}/v1${path}`, {
     ...init,
-    headers: { Authorization: `Bearer ${TOKEN}`, ...(init.headers ?? {}) },
+    headers: { Authorization: `Bearer ${await token()}`, ...(init.headers ?? {}) },
   });
   const body = await res.text();
   if (!res.ok) {

@@ -5,31 +5,34 @@
 import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { homedir, platform } from "node:os";
-import { dirname, join } from "node:path";
+import { readFile } from "node:fs/promises";
+import { platform } from "node:os";
 import type { AddressInfo } from "node:net";
+import { backend, deleteSecret, describe, readSecret, saveSecret } from "./secret-store.js";
 
 export const BASE_URL = (process.env.BEEPER_URL ?? "http://localhost:23373").replace(/\/$/, "");
 
-export const TOKEN_FILE =
-  process.env.BEEPER_TOKEN_FILE ??
-  (platform() === "win32"
-    ? join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "beeper-mcp-addon", "token.json")
-    : join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "beeper-mcp-addon", "token.json"));
+export { TOKEN_FILE } from "./secret-store.js";
 
 type StoredToken = { access_token: string; scope?: string; client_id?: string; base_url?: string; created_at?: string };
 
-/** BEEPER_ACCESS_TOKEN wins; otherwise the token saved by `beeper-mcp-addon login`. */
-export async function getToken(explicitFile?: string): Promise<string | undefined> {
-  if (!explicitFile && process.env.BEEPER_ACCESS_TOKEN?.trim()) return process.env.BEEPER_ACCESS_TOKEN.trim();
+const parse = (raw?: string) => {
+  if (!raw) return undefined;
   try {
-    const raw = (await readFile(explicitFile ?? TOKEN_FILE, "utf8")).trim();
     return raw.startsWith("{") ? (JSON.parse(raw) as StoredToken).access_token : raw;
   } catch {
     return undefined;
   }
+};
+
+/** BEEPER_ACCESS_TOKEN wins; otherwise the token saved by `beeper-mcp-addon login` in the OS secret store. */
+export async function getToken(explicitFile?: string): Promise<string | undefined> {
+  if (explicitFile) return parse((await readFile(explicitFile, "utf8").catch(() => "")).trim());
+  if (process.env.BEEPER_ACCESS_TOKEN?.trim()) return process.env.BEEPER_ACCESS_TOKEN.trim();
+  return parse(await readSecret());
 }
+
+export { describe as describeBackend, backend } from "./secret-store.js";
 
 export const NO_TOKEN_HELP =
   "No Beeper token found. Run `npx beeper-mcp-addon login` (opens Beeper to approve access),\n" +
@@ -125,8 +128,7 @@ export async function login({ scope = "read write", timeoutMs = 5 * 60_000 } = {
     if (!res.ok) throw new Error(`Token exchange failed (${res.status}): ${await res.text()}`);
     const token = (await res.json()) as { access_token: string; scope?: string };
 
-    // 5. Save it, readable by the current user only.
-    await mkdir(dirname(TOKEN_FILE), { recursive: true, mode: 0o700 });
+    // 5. Save it in the OS secret store.
     const stored: StoredToken = {
       access_token: token.access_token,
       scope: token.scope ?? scope,
@@ -134,16 +136,15 @@ export async function login({ scope = "read write", timeoutMs = 5 * 60_000 } = {
       base_url: BASE_URL,
       created_at: new Date().toISOString(),
     };
-    await writeFile(TOKEN_FILE, JSON.stringify(stored, null, 2) + "\n", { mode: 0o600 });
-    await chmod(TOKEN_FILE, 0o600).catch(() => {});
-    return stored;
+    const where = describe(await saveSecret(JSON.stringify(stored)));
+    return { ...stored, where };
   } finally {
     server.close();
   }
 }
 
 export async function logout() {
-  const token = await getToken(TOKEN_FILE);
+  const token = parse(await readSecret());
   if (token) {
     await fetch(`${BASE_URL}/oauth/revoke`, {
       method: "POST",
@@ -151,7 +152,7 @@ export async function logout() {
       body: new URLSearchParams({ token }),
     }).catch(() => {});
   }
-  await rm(TOKEN_FILE, { force: true });
+  await deleteSecret();
   return Boolean(token);
 }
 
@@ -166,7 +167,7 @@ export async function status() {
   const info = res?.ok ? ((await res.json()) as { active?: boolean; scope?: string }) : undefined;
   return {
     loggedIn: true as const,
-    source: process.env.BEEPER_ACCESS_TOKEN?.trim() ? "BEEPER_ACCESS_TOKEN" : TOKEN_FILE,
+    source: process.env.BEEPER_ACCESS_TOKEN?.trim() ? "BEEPER_ACCESS_TOKEN" : describe(await backend()),
     active: info?.active,
     scope: info?.scope,
     reachable: Boolean(res),
