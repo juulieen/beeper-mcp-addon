@@ -19,15 +19,46 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-const BASE_URL = (process.env.BEEPER_URL ?? "http://localhost:23373").replace(/\/$/, "");
-const TOKEN = process.env.BEEPER_ACCESS_TOKEN;
+import { BASE_URL, NO_TOKEN_HELP, TOKEN_FILE, getToken, login, logout, status } from "./auth.js";
+
+// CLI subcommands. With no subcommand, run the MCP server on stdio.
+const command = process.argv[2];
+if (command && command !== "serve") {
+  try {
+    if (command === "login") {
+      const readOnly = process.argv.includes("--read-only");
+      const t = await login({ scope: readOnly ? "read" : "read write" });
+      console.log(`✅ Logged in (${t.scope}). Token saved to ${TOKEN_FILE}`);
+    } else if (command === "logout") {
+      console.log((await logout()) ? `Token revoked and removed from ${TOKEN_FILE}` : "Not logged in.");
+    } else if (command === "status") {
+      const s = await status();
+      if (!s.loggedIn) console.log(`Not logged in. ${NO_TOKEN_HELP}`);
+      else if (!s.reachable) console.log(`Token found (${s.source}), but Beeper Desktop is not reachable at ${BASE_URL}.`);
+      else console.log(`${s.active ? "✅ Active" : "❌ Invalid or revoked"} token from ${s.source}${s.scope ? ` (scope: ${s.scope})` : ""}`);
+    } else {
+      console.log(`Usage: beeper-mcp-addon [command]
+
+  (no command)        Run the MCP server on stdio (what MCP clients launch)
+  login [--read-only] Approve access in Beeper and save a token to ${TOKEN_FILE}
+  logout              Revoke and delete the saved token
+  status              Show which token is used and whether it is valid
+
+Related: beeper-watch --help`);
+      process.exit(command === "help" || command === "--help" || command === "-h" ? 0 : 1);
+    }
+    process.exit(0);
+  } catch (err) {
+    console.error(`beeper-mcp-addon: ${err instanceof Error ? err.message : err}`);
+    process.exit(1);
+  }
+}
+
+const TOKEN = await getToken();
 const DOWNLOAD_DIR = process.env.BEEPER_DOWNLOAD_DIR ?? join(tmpdir(), "beeper-mcp-addon");
 
 if (!TOKEN) {
-  process.stderr.write(
-    "beeper-mcp-addon: BEEPER_ACCESS_TOKEN is required.\n" +
-      "Create one in Beeper Desktop > Settings > Developers (read + write to send files).\n",
-  );
+  process.stderr.write(`beeper-mcp-addon: ${NO_TOKEN_HELP}\n`);
   process.exit(1);
 }
 

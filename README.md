@@ -23,38 +23,47 @@ It runs **next to** the official Beeper MCP, not instead of it. Keep using the o
 ## Requirements
 
 - Beeper Desktop with the API enabled (Settings → Developers)
-- An access token from that same screen. A `read` token is enough for `download_attachment` and `search_contacts`; `send_file` and `start_chat` need `read` + `write`
-- Node.js 20+
+- Node.js 20+ (macOS, Linux and Windows)
 
 ## Setup
 
-### Claude Code
+**1. Connect to Beeper (once).** This opens Beeper so you can approve access, then saves a token on your machine:
 
 ```bash
-claude mcp add beeper-mcp-addon \
-  --env BEEPER_ACCESS_TOKEN=your-token \
-  -- npx -y beeper-mcp-addon
+npx -y beeper-mcp-addon login
 ```
 
-### Claude Desktop, Cursor, and other MCP clients
+The token is stored in `~/.config/beeper-mcp-addon/token.json` (Windows: `%APPDATA%\beeper-mcp-addon\token.json`), readable only by you. Check it with `npx beeper-mcp-addon status`, revoke it with `npx beeper-mcp-addon logout`.
+
+**2. Add the server to your MCP client.** No token in the config: the server reads the saved one.
+
+| Client | How |
+|---|---|
+| Claude Code | `claude mcp add beeper-mcp-addon -- npx -y beeper-mcp-addon` |
+| Claude Desktop | Add the JSON below to `claude_desktop_config.json` |
+| Cursor | Add the JSON below to `~/.cursor/mcp.json` |
+| Kimi Code | Add the JSON below to `~/.kimi-code/mcp.json` |
+| VS Code, Windsurf, others | Same JSON, in the client's MCP config file |
 
 ```json
 {
   "mcpServers": {
     "beeper-mcp-addon": {
       "command": "npx",
-      "args": ["-y", "beeper-mcp-addon"],
-      "env": { "BEEPER_ACCESS_TOKEN": "your-token" }
+      "args": ["-y", "beeper-mcp-addon"]
     }
   }
 }
 ```
+
+Prefer a manual token? Create one in Beeper Desktop → Settings → Developers and pass it as `BEEPER_ACCESS_TOKEN` in the `env` block instead of running `login`. A `read` token is enough for `download_attachment`, `search_contacts` and `beeper-watch`; `send_file` and `start_chat` need `read` + `write`.
 
 ### From source
 
 ```bash
 git clone https://github.com/juulieen/beeper-mcp-addon
 cd beeper-mcp-addon && npm install && npm run build
+node dist/index.js login
 # then use "command": "node", "args": ["/path/to/beeper-mcp-addon/dist/index.js"]
 ```
 
@@ -62,8 +71,9 @@ cd beeper-mcp-addon && npm install && npm run build
 
 | Variable | Default | |
 |---|---|---|
-| `BEEPER_ACCESS_TOKEN` | — (required) | Beeper Desktop API token |
+| `BEEPER_ACCESS_TOKEN` | token saved by `login` | Beeper Desktop API token; overrides the saved one |
 | `BEEPER_URL` | `http://localhost:23373` | Base URL of the Beeper Client API |
+| `BEEPER_TOKEN_FILE` | see above | Where `login` saves the token and where the server reads it |
 | `BEEPER_DOWNLOAD_DIR` | `<tmp>/beeper-mcp-addon` | Where downloads go when no `outputPath` is given |
 
 ## Tools
@@ -106,7 +116,7 @@ The assistant searches with the official Beeper MCP, calls `download_attachment`
 MCP tools can only be called, so an assistant never learns on its own that someone replied. The package also ships a small command that listens to Beeper's WebSocket and prints one JSON line per incoming message:
 
 ```bash
-BEEPER_ACCESS_TOKEN=your-token npx -p beeper-mcp-addon beeper-watch --chat 22565 --once
+npx -p beeper-mcp-addon beeper-watch --chat 22565 --once
 # {"event":"message","chat":"Pierre","sender":"Pierre","text":"Ok pour samedi !",...}
 ```
 
@@ -116,7 +126,7 @@ BEEPER_ACCESS_TOKEN=your-token npx -p beeper-mcp-addon beeper-watch --chat 22565
 | `--from <text>` | Only senders whose name or ID contains `<text>` |
 | `--once` | Exit after the first matching message |
 | `--include-own` | Also print your own messages (skipped by default) |
-| `--token-file <path>` | Read the token from a file instead of `BEEPER_ACCESS_TOKEN` |
+| `--token-file <path>` | Read the token from this file |
 
 Agents that can be woken by a command's output can use it to wait for a reply. In Claude Code, run it with the **Monitor** tool: each line wakes the assistant, and `--once` ends the watch after the reply. A `read` token is enough.
 

@@ -9,8 +9,8 @@
  * Output: one JSON object per line (NDJSON) on stdout. Status and errors go to stderr,
  * except connection loss, which is also reported on stdout so a watcher never stays silent.
  */
-import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
+import { BASE_URL, NO_TOKEN_HELP, getToken } from "./auth.js";
 
 const HELP = `Usage: beeper-watch [options]
 
@@ -21,10 +21,11 @@ Options:
   --from <text>      Only messages whose sender name or ID contains <text> (case-insensitive)
   --include-own      Also print messages you send (skipped by default)
   --once             Exit after the first matching message
-  --token-file <p>   Read the access token from a file instead of BEEPER_ACCESS_TOKEN
+  --token-file <p>   Read the access token from this file
   -h, --help         Show this help
 
-Environment: BEEPER_ACCESS_TOKEN (read scope is enough), BEEPER_URL (default http://localhost:23373)`;
+Token: BEEPER_ACCESS_TOKEN, else the one saved by "beeper-mcp-addon login" (read scope is enough).
+Environment: BEEPER_URL (default http://localhost:23373)`;
 
 const { values: opts } = parseArgs({
   options: {
@@ -42,10 +43,9 @@ if (opts.help) {
   process.exit(0);
 }
 
-const BASE_URL = (process.env.BEEPER_URL ?? "http://localhost:23373").replace(/\/$/, "");
-const TOKEN = (opts["token-file"] ? readFileSync(opts["token-file"], "utf8") : process.env.BEEPER_ACCESS_TOKEN ?? "").trim();
+const TOKEN = await getToken(opts["token-file"]);
 if (!TOKEN) {
-  console.error("beeper-watch: set BEEPER_ACCESS_TOKEN or pass --token-file.");
+  console.error(`beeper-watch: ${NO_TOKEN_HELP}`);
   process.exit(1);
 }
 
