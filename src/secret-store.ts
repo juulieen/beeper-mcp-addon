@@ -29,14 +29,22 @@ const DPAPI_FILE = join(CONFIG_DIR, "token.dpapi");
 
 export type Backend = "macos-keychain" | "windows-dpapi" | "secret-service" | "file";
 
-function run(cmd: string, args: string[], input?: string): Promise<{ code: number; stdout: string; stderr: string }> {
+function run(
+  cmd: string,
+  args: string[],
+  input?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(cmd, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+      child = spawn(cmd, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env });
     } catch {
       return resolve({ code: -1, stdout: "", stderr: `${cmd} not found` });
     }
+    // A child that exits without reading stdin makes the write fail (EPIPE): that's its exit code's
+    // business, not a crash of the server.
+    child.stdin.on("error", () => {});
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => (stdout += d));
@@ -48,8 +56,12 @@ function run(cmd: string, args: string[], input?: string): Promise<{ code: numbe
 }
 
 const psQuote = (s: string) => `'${s.replace(/'/g, "''")}'`;
-const powershell = (script: string, input?: string) =>
-  run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], input);
+// Started from PowerShell 7, PSModulePath points at modules Windows PowerShell 5.1 can't load
+// ("ConvertTo-SecureString ... could not be loaded"): let powershell.exe use its own defaults.
+const powershell = (script: string, input?: string) => {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => k.toUpperCase() !== "PSMODULEPATH"));
+  return run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], input, env);
+};
 
 let linuxKeyring: boolean | undefined;
 async function hasSecretService(): Promise<boolean> {
