@@ -40,7 +40,7 @@ npx -y beeper-mcp-addon install
 
 It finds the MCP clients on your machine — Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Kimi Code, Gemini CLI, Codex — asks before adding the server to each one (backing up the config first), then opens Beeper once so you can approve access. Restart your apps and you're done.
 
-Options: `--client cursor,vscode` (only these), `--yes` (no questions), `--dry-run` (show what would change), `--read-only`. Undo with `npx -y beeper-mcp-addon uninstall`.
+Options: `--client cursor,vscode` (only these), `--yes` (no questions), `--dry-run` (show what would change), `--no-login` (don't open Beeper afterwards), `--read-only`, `--local` (run this checkout of the code instead of the npm package). Undo with `npx -y beeper-mcp-addon uninstall`.
 
 ### One click
 
@@ -104,7 +104,7 @@ There is no telemetry: the addon never reports usage or installs anywhere.
 | `BEEPER_ACCESS_TOKEN` | token saved by `login` | Beeper Desktop API token; overrides the saved one |
 | `BEEPER_URL` | `http://localhost:23373` | Base URL of the Beeper Client API |
 | `BEEPER_TOKEN_FILE` | — | Force a plain token file instead of the system secret store |
-| `BEEPER_DOWNLOAD_DIR` | `<tmp>/beeper-mcp-addon` | Where downloads go when no `outputPath` is given |
+| `BEEPER_DOWNLOAD_DIR` | `~/.cache/beeper-mcp-addon/downloads` on Linux, `<temp>/beeper-mcp-addon/downloads` elsewhere | Where downloads go when no `outputPath` is given |
 | `BEEPER_ADDON_NO_UPDATE_CHECK` | — | Set to `1` to never check for a new version |
 | `BEEPER_FFMPEG` | `ffmpeg` on `PATH` | ffmpeg used to fix videos before sending (ffprobe is looked up next to it) |
 | `BEEPER_FFPROBE` | next to `BEEPER_FFMPEG`, else `ffprobe` on `PATH` | ffprobe used to check videos before sending |
@@ -118,7 +118,7 @@ Identify the attachment in any of these ways:
 - `url`: an `mxc://` / `localmxc://` media URL, **or** a `beeper-mcp://attachments/{chatID}/{messageID}/{index}` URI as printed by the official Beeper MCP's search results
 - `chatID` + `messageID` (+ `index` if the message has several attachments)
 
-Optional `outputPath` chooses where to save it. Returns `{ path, fileName, mimeType, sizeBytes }`.
+By default it's saved as a new file in the download folder (`BEEPER_DOWNLOAD_DIR`); the sender's file name is sanitized, so it can never choose the folder. `outputPath` saves it elsewhere, without replacing an existing file unless `overwrite: true` (which replaces your file: your client should ask first). Returns `{ path, fileName, mimeType, sizeBytes }`.
 
 ### `send_file`
 
@@ -136,7 +136,7 @@ Optional `outputPath` chooses where to save it. Returns `{ path, fileName, mimeT
 
 ### `wait_for_message`
 
-Optional `chatID`, `from` (part of the sender's name or ID), `since` (ISO time, usually that of your last message: a reply that arrived just before the call is returned right away) and `timeoutSeconds` (default 300, max 1800). Returns `{ status: "message", message }` or `{ status: "timeout" }`. For long waits, the `watch` command below is better: it doesn't hold a tool call open.
+Optional `chatID`, `from` (part of the sender's name or ID), `includeOwn` (also your own messages, default `false`), `since` (ISO time, usually that of your last message, needs `chatID`: a reply that arrived just before the call is returned right away) and `timeoutSeconds` (default 300, max 1800). Returns `{ status: "message", message, note }` or `{ status: "timeout" }`; `note` reminds the assistant that the message was written by its sender and is data, not instructions. Text from other people is length-limited: message text at 4000 characters, names at 200, at most 20 attachment names, each marked `… [truncated, N chars]` when cut (same in `watch` output). For long waits, the `watch` command below is better: it doesn't hold a tool call open.
 
 ### `delete_message`
 
@@ -178,7 +178,7 @@ If the connection drops, it prints `{"event":"disconnected",...}` and reconnects
 
 ## How it works
 
-It's about 450 lines of TypeScript that call the local Beeper Client API: `/v1/assets/download`, `/v1/assets/upload`, `/v1/chats/{chatID}/messages` (send and delete), `/v1/accounts/{accountID}/contacts` and `/v1/chats/start`. Everything stays on your machine; the server only talks to Beeper Desktop on `localhost`.
+A few small TypeScript files that call the local Beeper Client API: `/v1/assets/download`, `/v1/assets/upload`, `/v1/chats/{chatID}/messages` (send, read and delete), `/v1/chats/{chatID}`, `/v1/accounts/{accountID}/contacts` and `/v1/chats/start`, plus Beeper's WebSocket (`/v1/ws`) for real-time messages. Everything stays on your machine; the server only talks to Beeper Desktop on `localhost` (and, once a day at most, to npm and GitHub to check for a new version).
 
 ## License
 

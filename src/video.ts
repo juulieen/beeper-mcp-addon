@@ -8,8 +8,8 @@
  */
 import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
+import { WORK_DIR } from "./media.js";
 
 const FFMPEG = process.env.BEEPER_FFMPEG ?? "ffmpeg";
 const FFPROBE = process.env.BEEPER_FFPROBE ?? (process.env.BEEPER_FFMPEG ? process.env.BEEPER_FFMPEG.replace(/ffmpeg(\.exe)?$/i, "ffprobe$1") : "ffprobe");
@@ -72,8 +72,8 @@ export async function videoProblems(path: string): Promise<string[] | undefined>
 
 /** Re-encode to a widely compatible MP4. Returns the new file's path. */
 export async function convertVideo(path: string): Promise<string> {
-  const dir = join(tmpdir(), "beeper-mcp-addon", "converted");
-  await mkdir(dir, { recursive: true });
+  const dir = join(WORK_DIR, "converted");
+  await mkdir(dir, { recursive: true, mode: 0o700 });
   const out = join(dir, `${Date.now()}-${basename(path, extname(path))}.mp4`);
   // ffmpeg applies the rotation metadata by default (autorotate), then we scale the longest side.
   const scale =

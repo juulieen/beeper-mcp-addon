@@ -24,7 +24,7 @@ export const REVIEWS = {
     agent: "security-reviewer",
     why: "token handling, client configs, tools that act for the user, dependencies or CI changed",
     scope: (f) =>
-      /^(src\/(auth|secret-store|install|update|listen|index|video)\.ts$|package(-lock)?\.json$|\.github\/workflows\/|scripts\/hooks\/)/.test(f),
+      /^(src\/(auth|secret-store|install|update|listen|index|video|media)\.ts$|package(-lock)?\.json$|\.github\/workflows\/|scripts\/hooks\/)/.test(f),
   },
 };
 
@@ -70,7 +70,7 @@ if (cmd === "status") {
   if (!base) {
     console.log(`# No previous ${name} review: review these files in full.\n${files.join("\n")}`);
   } else {
-    console.log(`# Changes in the ${name} scope since the last passed review (commit ${base.slice(0, 10)}), including uncommitted ones:\n`);
+    console.log(`# Changes in the ${name} scope since the last passed review (snapshot ${base.slice(0, 10)}), including uncommitted ones:\n`);
     const tracked = new Set(git("ls-files", "-z").split("\0"));
     // git diff <commit> compares that commit to the working tree; new untracked files are listed after.
     process.stdout.write(execFileSync("git", ["diff", base, "--", ...files.filter((f) => tracked.has(f) || !existsSync(f))], { encoding: "utf8" }));
@@ -80,7 +80,11 @@ if (cmd === "status") {
 } else if (cmd === "pass") {
   known(name);
   mkdirSync(markerDir, { recursive: true });
-  const m = { fingerprint: fingerprint(name), commit: git("rev-parse", "HEAD"), at: new Date().toISOString() };
+  // Snapshot of the working tree as reviewed (tracked files), without touching it; a ref keeps it
+  // from being garbage-collected. The next `diff` then shows only what changed after this review.
+  const snapshot = git("stash", "create") || git("rev-parse", "HEAD");
+  git("update-ref", `refs/agent-reviews/${name}`, snapshot);
+  const m = { fingerprint: fingerprint(name), commit: snapshot, at: new Date().toISOString() };
   writeFileSync(markerFile(name), JSON.stringify(m, null, 2));
   console.log(`✓ ${name} review recorded for the current files.`);
 } else if (cmd === "stop-hook") {

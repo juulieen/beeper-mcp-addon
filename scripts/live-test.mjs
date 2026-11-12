@@ -36,9 +36,9 @@ const sent = [];
 const step = (msg) => console.log(`✓ ${msg}`);
 
 /** Send a file, then wait for the confirmed message (its final ID) with wait_for_message. */
-async function sendAndConfirm(filePath, text) {
+async function sendAndConfirm(filePath, text, fileName = text.endsWith("evil name") ? "../../../../evil-test.txt" : undefined) {
   let since = new Date(Date.now() - 1000).toISOString();
-  const r = await call("send_file", { chatID, filePath, text });
+  const r = await call("send_file", { chatID, filePath, text, ...(fileName ? { fileName } : {}) });
   // `since` returns the oldest message after that time: skip earlier ones until ours shows up.
   for (let i = 0; i < 5; i++) {
     const w = await call("wait_for_message", { chatID, since, includeOwn: true, timeoutSeconds: 60 });
@@ -61,6 +61,12 @@ try {
   const d = await call("download_attachment", { chatID, messageID: a.messageID, outputPath: join(dir, "back.txt") });
   if (d.sizeBytes !== statSync(doc).size) throw new Error(`downloaded ${d.sizeBytes} bytes, sent ${statSync(doc).size}`);
   step("download_attachment returns the same file");
+
+  // A sender-chosen name like "../../x" must never leave the download folder.
+  const evil = await sendAndConfirm(doc, "beeper-mcp-addon live test: evil name");
+  const e = await call("download_attachment", { chatID, messageID: evil.messageID });
+  if (!e.path.includes("beeper-mcp-addon") || e.path.includes("..")) throw new Error(`unsafe download path: ${e.path}`);
+  step(`download_attachment keeps a hostile file name in the download folder (${e.path})`);
 
   if (spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status === 0) {
     const video = join(dir, "pixel.mp4");

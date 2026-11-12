@@ -1,32 +1,36 @@
-# On a version tag (v0.2.0…): publish to npm with trusted publishing (no npm token stored
-# anywhere, provenance attached) and attach the Claude Desktop bundle to a GitHub release.
+# On a version tag (created by scripts/release.mjs through `gh release create`): run CI, publish
+# to npm with trusted publishing (no npm token anywhere, provenance attached), and attach the
+# Claude Desktop bundle to the GitHub release. Each job gets only the permission it needs.
 name: release
 on:
   push:
     tags: ["v*"]
 
 permissions:
-  contents: write # create the GitHub release
-  id-token: write # npm trusted publishing (OIDC)
+  contents: read
 
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
-  release:
+  npm:
     needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (OIDC)
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - run: npm install -g npm@latest
-      - run: npm ci
+      - run: npm install -g npm@11.19.1 # trusted publishing needs >= 11.5.1; pinned in this job that can publish
+      - run: npm ci --ignore-scripts # no install scripts; only tsc runs below
       - name: Check tag matches package.json
         run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
-      - run: npm run build
       - name: Publish to npm (skipped if this version is already published)
         run: |
           if npm view "beeper-mcp-addon@${GITHUB_REF_NAME#v}" version >/dev/null 2>&1; then
@@ -34,6 +38,20 @@ jobs:
           else
             npm publish --provenance --access public
           fi
+
+  bundle:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # attach the .mcpb to the release; no npm publishing right here
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts # no dependency install scripts next to a repo-write token
       - run: npm run bundle
       - name: Attach the .mcpb to the GitHub release
         run: |

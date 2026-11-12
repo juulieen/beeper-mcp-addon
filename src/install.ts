@@ -132,8 +132,10 @@ function applyCli(c: Client, remove: boolean, dryRun: boolean): Result {
   const { bin, add, remove: rm } = c.cli!;
   if (!hasBin(bin)) return { client: c.label, status: "skipped", detail: `"${bin}" not on PATH` };
   if (dryRun) return { client: c.label, status: remove ? "removed" : "added", detail: `would run: ${bin} ${(remove ? rm : add).join(" ")}` };
-  if (!remove) spawnSync(bin, rm, { stdio: "ignore", shell: WIN }); // re-add cleanly if already there
-  const r = spawnSync(bin, remove ? rm : add, { encoding: "utf8", shell: WIN });
+  // On Windows `claude` is a .cmd, which needs a shell; quote arguments so paths with spaces survive.
+  const q = (args: string[]) => (WIN ? args.map((a) => (/[\s"&|<>^]/.test(a) ? `"${a.replace(/"/g, '""')}"` : a)) : args);
+  if (!remove) spawnSync(bin, q(rm), { stdio: "ignore", shell: WIN }); // re-add cleanly if already there
+  const r = spawnSync(bin, q(remove ? rm : add), { encoding: "utf8", shell: WIN });
   if (r.status !== 0) {
     const out = `${r.stderr ?? ""}${r.stdout ?? ""}`.trim();
     if (remove && /not found|no .*server/i.test(out)) return { client: c.label, status: "absent" };

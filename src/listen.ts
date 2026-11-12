@@ -6,6 +6,7 @@
  * disconnected, so `recentMessages` covers the gap through the REST API.
  */
 import { BASE_URL } from "./auth.js";
+import { clip } from "./media.js";
 
 type Entry = {
   id: string;
@@ -65,14 +66,15 @@ export function createClient(token: string) {
     return {
       event: "message",
       chatID: e.chatID,
-      chat: chat.title,
+      // Written by other people: keep it bounded before it reaches the agent.
+      chat: clip(chat.title, 200),
       network: chat.network,
       messageID: e.id,
-      sender: e.senderName ?? e.senderID,
+      sender: clip(e.senderName ?? e.senderID, 200),
       time: e.timestamp,
       type: e.type,
-      text: e.text,
-      ...(e.attachments?.length ? { attachments: e.attachments.map((a) => a.fileName ?? a.type ?? "file") } : {}),
+      text: clip(e.text, 4000),
+      ...(e.attachments?.length ? { attachments: e.attachments.slice(0, 20).map((a) => clip(a.fileName ?? a.type ?? "file", 200)!) } : {}),
     };
   }
 

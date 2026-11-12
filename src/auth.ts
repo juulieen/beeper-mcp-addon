@@ -40,9 +40,12 @@ export const NO_TOKEN_HELP =
 
 const b64url = (buf: Buffer) => buf.toString("base64url");
 
+const escapeHTML = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
 function openBrowser(url: string) {
+  // No shell anywhere: on Windows, `cmd /c start` would split the URL at each "&".
   const [cmd, args] =
-    platform() === "darwin" ? ["open", [url]] : platform() === "win32" ? ["cmd", ["/c", "start", "", url]] : ["xdg-open", [url]];
+    platform() === "darwin" ? ["open", [url]] : platform() === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", url]] : ["xdg-open", [url]];
   try {
     spawn(cmd, args, { stdio: "ignore", detached: true }).on("error", () => {}).unref();
   } catch {}
@@ -67,17 +70,19 @@ export async function login({ scope = "read write", timeoutMs = 5 * 60_000 } = {
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     if (url.pathname !== "/callback") return void res.writeHead(404).end();
+    // Anything without our state is not Beeper answering this login: ignore it, don't fail the login.
+    if (url.searchParams.get("state") !== state) return void res.writeHead(404).end();
     const error = url.searchParams.get("error");
     const code = url.searchParams.get("code");
-    const ok = !error && code && url.searchParams.get("state") === state;
+    const ok = !error && code;
     res.writeHead(ok ? 200 : 400, { "Content-Type": "text/html; charset=utf-8" });
     res.end(
       `<!doctype html><meta charset="utf-8"><title>beeper-mcp-addon</title>` +
         `<body style="font:16px system-ui;padding:3rem;text-align:center">` +
-        (ok ? "<h2>✅ Connected to Beeper</h2><p>You can close this tab.</p>" : `<h2>❌ Authorization failed</h2><p>${error ?? "invalid response"}</p>`),
+        (ok ? "<h2>✅ Connected to Beeper</h2><p>You can close this tab.</p>" : `<h2>❌ Authorization failed</h2><p>${escapeHTML(error ?? "invalid response")}</p>`),
     );
     if (ok) resolveCode(code!);
-    else rejectCode(new Error(`Authorization failed: ${error ?? "state mismatch or missing code"}`));
+    else rejectCode(new Error(`Authorization failed: ${error ?? "missing code"}`));
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const redirectURI = `http://127.0.0.1:${(server.address() as AddressInfo).port}/callback`;

@@ -26,7 +26,7 @@ for (const [what, edit, message] of [
   ["a tool missing from the manifest", replaceIn("manifest.json", '"name": "delete_message"', '"name": "x_y"'), /manifest.json tools/],
   ["an undocumented variable", replaceIn("src/index.ts", "process.env.BEEPER_DOWNLOAD_DIR", "process.env.BEEPER_NEW_THING"), /missing BEEPER_NEW_THING/],
   ["a pinned version in the README", replaceIn("README.md", "npx -y beeper-mcp-addon install", "npx -y beeper-mcp-addon@0.3.0 install"), /real version/],
-  ["a sending tool that doesn't ask to confirm", replaceIn("src/index.ts", "This sends a real message on the user's behalf: confirm the recipient first.", "Sends it."), /send_file: not read-only/],
+  ["a sending tool that doesn't ask to confirm", replaceIn("src/index.ts", "This sends a real message on the user's behalf: confirm the recipient and the file first.", "Sends it."), /send_file: not read-only/],
 ]) {
   test(`it catches ${what}`, () => {
     const r = checkWith(edit);

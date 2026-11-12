@@ -25,3 +25,17 @@ test("beeper-mcp:// attachment URIs", () => {
   assert.equal(parseAttachmentURI("mxc://beeper.com/xyz"), undefined);
   assert.equal(parseAttachmentURI("beeper-mcp://attachments/a/b"), undefined);
 });
+
+test("attachment names chosen by the sender can't pick the folder", async () => {
+  const { safeFileName, clip } = await import("../dist/media.js");
+  const { join, resolve, dirname } = await import("node:path");
+  for (const evil of ["../../../../home/u/.bashrc", "..\\..\\Windows\\evil.dll", "/etc/passwd", "..", ".", "  ", "a\u0000b:c?.txt", undefined]) {
+    const name = safeFileName(evil);
+    assert.ok(name.length > 0 && !/[\\/]/.test(name) && !name.startsWith("."), `${evil} → ${name}`);
+    assert.equal(dirname(resolve(join("/dl", `1-${name}`))), resolve("/dl"), `${evil} escapes: ${name}`);
+  }
+  assert.equal(safeFileName("photo.jpg"), "photo.jpg");
+  assert.equal(safeFileName("../x/report final.pdf"), "report final.pdf");
+  assert.equal(clip("abc", 10), "abc");
+  assert.match(clip("x".repeat(50), 10), /^x{10}… \[truncated, 50 chars\]$/);
+});

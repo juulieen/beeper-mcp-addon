@@ -24,9 +24,9 @@ The `pre-commit` hook (`scripts/hooks/`, enabled by `npm install`) runs `check` 
 - `src/secret-store.ts`: token in macOS Keychain / Windows DPAPI / Linux Secret Service, fallback file 0600; moves a file token into a keyring once one exists.
 - `src/install.ts`: adds/removes the server in 8 MCP clients (JSON, VS Code `servers`, Codex TOML, Claude Code CLI).
 - `src/listen.ts`: Beeper WebSocket (`/v1/ws`) + history, shared by `watch` and `wait_for_message`.
-- `src/watch.ts`: `watch` command (also the `beeper-watch` bin). `src/video.ts`: ffprobe check + ffmpeg conversion. `src/update.ts`: once-a-day update notice. `src/media.ts`: `beeper-mcp://` URIs.
+- `src/watch.ts`: `watch` command (also the `beeper-watch` bin). `src/video.ts`: ffprobe check + ffmpeg conversion. `src/update.ts`: once-a-day update notice. `src/media.ts`: `beeper-mcp://` URIs, `safeFileName` (sender-chosen attachment names), `WORK_DIR` (per-user folder for downloads and converted videos: `~/.cache/beeper-mcp-addon` on Linux), `clip` (limits text from outside).
 - `manifest.json`: Claude Desktop `.mcpb` (`npm run bundle`). `server.json`: MCP registry entry.
-- `.github/workflows/`: `ci` (3 OS), `release` (on a GitHub release: CI, npm trusted publishing with provenance, `.mcpb`), `mcp-registry` (after release, GitHub OIDC).
+- `.github/workflows/`: `ci` (3 OS), `release` (on a GitHub release: CI, then npm trusted publishing with provenance and the `.mcpb` in separate jobs), `mcp-registry` (after release, GitHub OIDC).
 - `.agents/agents/` (reviewers) and `.agents/skills/` (release): read by Kimi Code, linked from `.claude/` for Claude Code.
 - `docs/decisions.md`: why things are the way they are. Read it before changing a design choice.
 
@@ -56,7 +56,7 @@ A `Stop` hook (`node scripts/review-state.mjs stop-hook`, in `.claude/settings.j
 | Review | Agent file | Model | Scope |
 |---|---|---|---|
 | docs | `.agents/agents/doc-reviewer.md` | sonnet | `src/`, README, AGENTS.md, `docs/`, manifest, server.json, package.json |
-| security | `.agents/agents/security-reviewer.md` | opus | auth, secret store, install, update, listen, tools, video, dependencies, workflows, hooks |
+| security | `.agents/agents/security-reviewer.md` | opus | auth, secret store, install, update, listen, media, tools, video, dependencies, workflows, hooks |
 
 Give the subagent only its task ("Review the current changes"), not your conclusions. Fix what it reports and run it again; it records its own pass (`review-state.mjs pass <review>`). Don't record a pass yourself. `release-notes-reviewer.md` runs during `/release`.
 
