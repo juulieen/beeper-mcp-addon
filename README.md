@@ -101,6 +101,27 @@ The assistant searches with the official Beeper MCP, calls `download_attachment`
 
 `start_chat` with the phone number, then `send_file` on the returned `chatID`. No need to open the conversation by hand first.
 
+## Real-time: `beeper-watch`
+
+MCP tools can only be called, so an assistant never learns on its own that someone replied. The package also ships a small command that listens to Beeper's WebSocket and prints one JSON line per incoming message:
+
+```bash
+BEEPER_ACCESS_TOKEN=your-token npx -p beeper-mcp-addon beeper-watch --chat 22565 --once
+# {"event":"message","chat":"Pierre","sender":"Pierre","text":"Ok pour samedi !",...}
+```
+
+| Option | |
+|---|---|
+| `--chat <id>` | Only this chat (chat ID or local chat ID). Repeatable. Default: all chats |
+| `--from <text>` | Only senders whose name or ID contains `<text>` |
+| `--once` | Exit after the first matching message |
+| `--include-own` | Also print your own messages (skipped by default) |
+| `--token-file <path>` | Read the token from a file instead of `BEEPER_ACCESS_TOKEN` |
+
+Agents that can be woken by a command's output can use it to wait for a reply. In Claude Code, run it with the **Monitor** tool: each line wakes the assistant, and `--once` ends the watch after the reply. A `read` token is enough.
+
+If the connection drops, it prints `{"event":"disconnected",...}` and reconnects. Beeper does not replay messages sent in the meantime, so re-read the chat after a disconnect.
+
 ## How it works
 
 It's about 300 lines of TypeScript that call the local Beeper Client API: `/v1/assets/download`, `/v1/assets/upload`, `/v1/chats/{chatID}/messages`, `/v1/accounts/{accountID}/contacts` and `/v1/chats/start`. Everything stays on your machine; the server only talks to Beeper Desktop on `localhost`.

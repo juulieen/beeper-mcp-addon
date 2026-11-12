@@ -28,7 +28,8 @@
     "typescript": "^7.0.2"
   },
   "bin": {
-    "beeper-mcp-addon": "dist/index.js"
+    "beeper-mcp-addon": "dist/index.js",
+    "beeper-watch": "dist/watch.js"
   },
   "files": [
     "dist",
