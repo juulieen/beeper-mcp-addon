@@ -22,49 +22,66 @@ It runs **next to** the official Beeper MCP, not instead of it. Keep using the o
 
 ## Requirements
 
-- Beeper Desktop with the API enabled (Settings → Developers)
-- Node.js 20+ (macOS, Linux and Windows)
+- [Beeper Desktop](https://www.beeper.com/download) with its API enabled (Settings → Developers)
+- Node.js 20+ — except for the Claude Desktop bundle, which uses Claude's built-in Node
 
-## Setup
+Works on **macOS, Windows and Linux**.
 
-**1. Connect to Beeper (once).** This opens Beeper so you can approve access, then saves a token on your machine:
+## Install
+
+### One command, every client
 
 ```bash
-npx -y beeper-mcp-addon login
+npx -y beeper-mcp-addon install
 ```
 
-The token is stored in `~/.config/beeper-mcp-addon/token.json` (Windows: `%APPDATA%\beeper-mcp-addon\token.json`), readable only by you. Check it with `npx beeper-mcp-addon status`, revoke it with `npx beeper-mcp-addon logout`.
+It finds the MCP clients on your machine — Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Kimi Code, Gemini CLI, Codex — asks before adding the server to each one (backing up the config first), then opens Beeper once so you can approve access. Restart your apps and you're done.
 
-**2. Add the server to your MCP client.** No token in the config: the server reads the saved one.
+Options: `--client cursor,vscode` (only these), `--yes` (no questions), `--dry-run` (show what would change), `--read-only`. Undo with `npx -y beeper-mcp-addon uninstall`.
 
-| Client | How |
-|---|---|
-| Claude Code | `claude mcp add beeper-mcp-addon -- npx -y beeper-mcp-addon` |
-| Claude Desktop | Add the JSON below to `claude_desktop_config.json` |
-| Cursor | Add the JSON below to `~/.cursor/mcp.json` |
-| Kimi Code | Add the JSON below to `~/.kimi-code/mcp.json` |
-| VS Code, Windsurf, others | Same JSON, in the client's MCP config file |
+### One click
+
+[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=beeper-mcp-addon&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImJlZXBlci1tY3AtYWRkb24iXX0%3D)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_server-0098FF?logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=beeper-mcp-addon&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22beeper-mcp-addon%22%5D%7D)
+
+**Claude Desktop:** download `beeper-mcp-addon.mcpb` from the [latest release](https://github.com/juulieen/beeper-mcp-addon/releases/latest) and double-click it. No Node.js needed.
+
+On first use, Beeper opens and asks you to approve access.
+
+### By hand
+
+```bash
+claude mcp add beeper-mcp-addon -- npx -y beeper-mcp-addon   # Claude Code
+```
+
+Any other client:
 
 ```json
 {
   "mcpServers": {
-    "beeper-mcp-addon": {
-      "command": "npx",
-      "args": ["-y", "beeper-mcp-addon"]
-    }
+    "beeper-mcp-addon": { "command": "npx", "args": ["-y", "beeper-mcp-addon"] }
   }
 }
 ```
 
-Prefer a manual token? Create one in Beeper Desktop → Settings → Developers and pass it as `BEEPER_ACCESS_TOKEN` in the `env` block instead of running `login`. A `read` token is enough for `download_attachment`, `search_contacts` and `beeper-watch`; `send_file` and `start_chat` need `read` + `write`.
+On Windows, use `"command": "cmd", "args": ["/c", "npx", "-y", "beeper-mcp-addon"]`.
+
+Then connect once with `npx -y beeper-mcp-addon login`, or just use a tool: Beeper will ask you to approve.
+
+## Security
+
+- **You approve access in Beeper.** `login` uses Beeper's own OAuth screen (with PKCE); nothing is copied by hand. Beeper's approval screen decides the access level (read only, or read + write to send).
+- **The token stays in your system's secret store:** macOS Keychain, Windows DPAPI (encrypted for your user), or the Linux keyring (GNOME Keyring / KWallet via `secret-tool`). Without a keyring, it falls back to a file readable only by you — the same way Claude Code stores its own credentials on Linux. It is never written to MCP client configs, and never passed on a command line.
+- **Everything is local.** The server only talks to Beeper Desktop on `localhost`.
+- **Sending is explicit.** `send_file` and `start_chat` act on your behalf; keep your client's per-call approval on.
+- `npx -y beeper-mcp-addon status` shows where the token lives and whether it's valid; `logout` revokes and deletes it.
 
 ### From source
 
 ```bash
 git clone https://github.com/juulieen/beeper-mcp-addon
 cd beeper-mcp-addon && npm install && npm run build
-node dist/index.js login
-# then use "command": "node", "args": ["/path/to/beeper-mcp-addon/dist/index.js"]
+node dist/index.js install
 ```
 
 ## Configuration
@@ -73,7 +90,7 @@ node dist/index.js login
 |---|---|---|
 | `BEEPER_ACCESS_TOKEN` | token saved by `login` | Beeper Desktop API token; overrides the saved one |
 | `BEEPER_URL` | `http://localhost:23373` | Base URL of the Beeper Client API |
-| `BEEPER_TOKEN_FILE` | see above | Where `login` saves the token and where the server reads it |
+| `BEEPER_TOKEN_FILE` | — | Force a plain token file instead of the system secret store |
 | `BEEPER_DOWNLOAD_DIR` | `<tmp>/beeper-mcp-addon` | Where downloads go when no `outputPath` is given |
 
 ## Tools

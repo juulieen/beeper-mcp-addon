@@ -1,0 +1,25 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.juulieen/beeper-mcp-addon",
+  "title": "Beeper MCP Addon",
+  "description": "Files and new conversations for Beeper's MCP: send/download attachments, find contacts, start chats.",
+  "repository": { "url": "https://github.com/juulieen/beeper-mcp-addon", "source": "github" },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "beeper-mcp-addon",
+      "version": "0.1.0",
+      "runtimeHint": "npx",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "BEEPER_ACCESS_TOKEN",
+          "description": "Optional. Without it, run `npx beeper-mcp-addon login` or approve access in Beeper on first use.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

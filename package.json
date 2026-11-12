@@ -1,12 +1,13 @@
 {
   "name": "beeper-mcp-addon",
   "version": "0.1.0",
-  "description": "MCP server adding file download/upload and new-conversation tools to Beeper Desktop (companion to the built-in Beeper MCP)",
+  "description": "Files and new conversations for Beeper's MCP: send/download attachments, find contacts, start chats (unofficial companion to Beeper Desktop's MCP)",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "npm run build",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "bundle": "rm -rf .bundle && mkdir .bundle && npm run build && cp -r dist manifest.json package.json package-lock.json README.md LICENSE .bundle/ && cd .bundle && npm ci --omit=dev --ignore-scripts && npx -y @anthropic-ai/mcpb@2.1.2 pack . ../beeper-mcp-addon.mcpb"
   },
   "keywords": [
     "beeper",
@@ -43,5 +44,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/juulieen/beeper-mcp-addon.git"
-  }
+  },
+  "mcpName": "io.github.juulieen/beeper-mcp-addon",
+  "homepage": "https://github.com/juulieen/beeper-mcp-addon"
 }
