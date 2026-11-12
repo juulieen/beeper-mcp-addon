@@ -177,7 +177,7 @@ const server = new McpServer(
     instructions:
       "Companion to the official Beeper MCP: files (download_attachment, send_file), new chats (search_contacts, start_chat) " +
       "and delete_message. Tools that send or delete act on the user's behalf: confirm with the user first.\n\n" +
-      "Waiting for a reply or an incoming message: never poll Beeper's database files or re-list messages in a loop.\n" +
+      "Waiting for a reply or an incoming message:\n" +
       `- If you can run a background command that wakes you on each output line (e.g. Claude Code's Monitor tool), run: ` +
       `${WATCH_CMD} --chat <chatID> [--from <name>] --since <ISO time of your last message> --once\n` +
       "  It prints one JSON line when a matching message arrives, then exits. Without --once it keeps watching.\n" +
