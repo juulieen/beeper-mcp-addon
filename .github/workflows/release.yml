@@ -1,0 +1,30 @@
+# On a version tag (v0.2.0…): publish to npm with trusted publishing (no npm token stored
+# anywhere, provenance attached) and attach the Claude Desktop bundle to a GitHub release.
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the GitHub release
+  id-token: write # npm trusted publishing (OIDC)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - name: Check tag matches package.json
+        run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      - run: npm run build
+      - run: npm publish --provenance --access public
+      - run: npm run bundle
+      - run: gh release create "$GITHUB_REF_NAME" ../beeper-mcp-addon.mcpb --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
