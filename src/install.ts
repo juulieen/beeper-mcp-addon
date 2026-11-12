@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir, platform } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 
 const NAME = "beeper-mcp-addon";
@@ -17,7 +18,13 @@ const APPDATA = process.env.APPDATA ?? join(HOME, "AppData", "Roaming");
 const XDG = process.env.XDG_CONFIG_HOME ?? join(HOME, ".config");
 
 /** On Windows, clients start servers without a shell, so `npx` (a .cmd) must go through cmd. */
-const COMMAND = WIN ? { command: "cmd", args: ["/c", "npx", "-y", NAME] } : { command: "npx", args: ["-y", NAME] };
+// With --local, point clients at this copy of the code (a git checkout) instead of the npm package.
+const LOCAL = process.argv.includes("--local");
+const COMMAND = LOCAL
+  ? { command: process.execPath, args: [join(dirname(fileURLToPath(import.meta.url)), "index.js")] }
+  : WIN
+    ? { command: "cmd", args: ["/c", "npx", "-y", NAME] }
+    : { command: "npx", args: ["-y", NAME] };
 
 /** Per-OS user config directory of an Electron app (Claude Desktop, VS Code…). */
 const appConfig = (app: string) => (MAC ? join(HOME, "Library", "Application Support", app) : WIN ? join(APPDATA, app) : join(XDG, app));

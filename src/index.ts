@@ -53,6 +53,7 @@ if (command && command !== "serve") {
   (no command)        Run the MCP server on stdio (what MCP clients launch)
   install             Add the server to every MCP client found (Claude, Cursor, VS Code, Kimi…), then log in
                       Options: --client <id,...>  --yes  --dry-run  --no-login  --read-only
+                      --local (run this copy of the code instead of the npm package)
   uninstall           Remove it from those clients
   login [--read-only] Approve access in Beeper; the token goes to ${describeBackend(await backend())}
   logout              Revoke and delete the saved token

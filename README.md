@@ -83,7 +83,7 @@ Then connect once with `npx -y beeper-mcp-addon login`, or just use a tool: Beep
 ```bash
 git clone https://github.com/juulieen/beeper-mcp-addon
 cd beeper-mcp-addon && npm install && npm run build
-node dist/index.js install
+node dist/index.js install --local   # clients run this checkout, not the npm package
 ```
 
 ## Configuration
