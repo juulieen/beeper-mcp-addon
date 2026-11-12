@@ -23,8 +23,17 @@ jobs:
       - name: Check tag matches package.json
         run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
       - run: npm run build
-      - run: npm publish --provenance --access public
+      - name: Publish to npm (skipped if this version is already published)
+        run: |
+          if npm view "beeper-mcp-addon@${GITHUB_REF_NAME#v}" version >/dev/null 2>&1; then
+            echo "Already on npm, skipping."
+          else
+            npm publish --provenance --access public
+          fi
       - run: npm run bundle
-      - run: gh release create "$GITHUB_REF_NAME" ../beeper-mcp-addon.mcpb --generate-notes
+      - name: Attach the .mcpb to the GitHub release
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" ../beeper-mcp-addon.mcpb --clobber
         env:
           GH_TOKEN: ${{ github.token }}
