@@ -2,10 +2,11 @@
 /**
  * beeper-files-mcp — companion MCP server for Beeper Desktop.
  *
- * Beeper's built-in MCP server handles text only. This server adds the two
+ * Beeper's built-in MCP server handles text in existing chats only. This server adds the
  * missing file tools on top of the Beeper Client API (localhost:23373):
  *   - download_attachment: save a message attachment to disk
  *   - send_file: send a local file to any chat
+ *   - search_contacts / start_chat: reach people you have no conversation with yet
  *
  * Run it alongside the official Beeper MCP, not instead of it.
  */
@@ -198,6 +199,87 @@ server.registerTool(
         fileName: name,
         mimeType: mimeType ?? upload.mimeType,
         sizeBytes: info.size,
+      });
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+type Contact = { id: string; fullName?: string; username?: string; phoneNumber?: string; email?: string; cannotMessage?: boolean };
+
+server.registerTool(
+  "search_contacts",
+  {
+    title: "Search contacts on a Beeper account",
+    description:
+      "Find people on one account (e.g. WhatsApp, Signal), including people you have never chatted with. " +
+      "A phone number, email or @username is also looked up exactly on the network. " +
+      "Use the returned `id` with start_chat. Account IDs come from the official Beeper MCP's get_accounts.",
+    inputSchema: {
+      accountID: z.string().describe("Account to search, e.g. whatsapp.33612345678"),
+      query: z.string().min(1).describe("Name, phone number (E.164), email or @username"),
+      limit: z.number().int().min(1).max(50).optional().describe("Max results (default 10)"),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  async ({ accountID, query, limit = 10 }) => {
+    try {
+      const res = await api<{ items?: Contact[] }>(
+        `/accounts/${enc(accountID)}/contacts?query=${enc(query)}`,
+      );
+      const contacts = (res.items ?? []).slice(0, limit).map(({ id, fullName, username, phoneNumber, email, cannotMessage }) => ({
+        id, fullName, username, phoneNumber, email, ...(cannotMessage ? { cannotMessage } : {}),
+      }));
+      return ok({ count: contacts.length, contacts });
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+server.registerTool(
+  "start_chat",
+  {
+    title: "Start a direct chat",
+    description:
+      "Open a direct chat with someone, even if you have never messaged them on this account, and return its chatID " +
+      "so you can then send messages or files. Reuses the existing chat when there is one. " +
+      "Identify the person with `userID` (from search_contacts), `phoneNumber`, `username` or `email`. " +
+      "Some networks need a first message to create the chat: pass it in `messageText` (it is sent immediately; confirm with the user first).",
+    inputSchema: {
+      accountID: z.string().describe("Account to start the chat on, e.g. whatsapp.33612345678"),
+      userID: z.string().optional().describe("Contact ID from search_contacts"),
+      phoneNumber: z.string().optional().describe("Phone number, E.164 preferred (+33612345678)"),
+      username: z.string().optional().describe("Username / handle"),
+      email: z.string().optional().describe("Email address"),
+      fullName: z.string().optional().describe("Display name, only used to rank candidates"),
+      messageText: z.string().optional().describe("First message, only if the network requires one to create the chat"),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  },
+  async ({ accountID, userID, phoneNumber, username, email, fullName, messageText }) => {
+    try {
+      if (!userID && !phoneNumber && !username && !email) {
+        throw new BeeperError("Provide at least one of userID, phoneNumber, username or email.");
+      }
+      const user = Object.fromEntries(
+        Object.entries({ id: userID, phoneNumber, username, email, fullName }).filter(([, v]) => v),
+      );
+      const chat = await api<{ id: string; localChatID?: string; title?: string; network?: string; type?: string }>(
+        "/chats/start",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accountID, user, ...(messageText ? { messageText } : {}) }),
+        },
+      );
+      return ok({
+        chatID: chat.id,
+        localChatID: chat.localChatID,
+        title: chat.title,
+        network: chat.network,
+        type: chat.type,
       });
     } catch (err) {
       return fail(err);

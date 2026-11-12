@@ -1,7 +1,7 @@
 {
   "name": "beeper-files-mcp",
   "version": "0.1.0",
-  "description": "MCP server adding file download/upload tools to Beeper Desktop (companion to the built-in Beeper MCP)",
+  "description": "MCP server adding file download/upload and new-conversation tools to Beeper Desktop (companion to the built-in Beeper MCP)",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -14,7 +14,8 @@
     "model-context-protocol",
     "whatsapp",
     "attachments",
-    "claude"
+    "claude",
+    "contacts"
   ],
   "license": "MIT",
   "type": "module",
