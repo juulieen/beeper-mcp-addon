@@ -4,7 +4,7 @@
  *
  * Beeper's built-in MCP server handles text in existing chats only. This server adds the
  * missing tools on top of the Beeper Client API (localhost:23373):
- *   - download_attachment: save a message attachment to disk
+ *   - download_attachment: save a message attachment to disk, or every photo/video of a chat in a period
  *   - send_file: send a local file to any chat
  *   - search_contacts / start_chat: reach people you have no conversation with yet
  *   - delete_message: delete (unsend) a message
@@ -18,6 +18,7 @@
 import { openAsBlob } from "node:fs";
 import { constants } from "node:fs";
 import { copyFile, mkdir, rm, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -30,7 +31,7 @@ import { convertVideo, videoProblems } from "./video.js";
 import { VERSION, updateNotice } from "./update.js";
 import { createClient } from "./listen.js";
 import { WORK_DIR, clip, parseAttachmentURI, safeFileName } from "./media.js";
-import { type ApiMessage, type Participant, isNoise, localTime, messageLine, reactionsByPeople } from "./messages.js";
+import { ME, type ApiMessage, type Participant, fileTime, isNoise, localTime, messageLine, outsideName, reactionsByPeople } from "./messages.js";
 
 // CLI subcommands. With no subcommand, run the MCP server on stdio.
 const command = process.argv[2];
@@ -213,6 +214,9 @@ async function resolveMediaURL(input: {
   return { url: attachment.id, attachment };
 }
 
+/** "~/Pictures" → the user's home: agents often write paths the way people say them. */
+const expandHome = (p: string) => (/^~(?:[\\/]|$)/.test(p) ? join(homedir(), p.slice(1)) : p);
+
 function toLocalPath(srcURL: string): string {
   return srcURL.startsWith("file://") ? fileURLToPath(srcURL) : srcURL;
 }
@@ -254,18 +258,139 @@ server.registerTool = ((name: string, config: never, cb: (...a: never[]) => Prom
     return result;
   }) as never)) as typeof server.registerTool;
 
+// Batch downloads: which attachments count as which kind (Beeper's search filters by the same kinds).
+const MEDIA_KINDS = ["image", "video", "file"] as const;
+type MediaKind = (typeof MEDIA_KINDS)[number];
+type ApiAttachment = NonNullable<ApiMessage["attachments"]>[number];
+const kindOf = (a: ApiAttachment): MediaKind => (a.type === "img" ? "image" : a.type === "video" ? "video" : "file");
+const extFor = (mimeType: string | undefined) => Object.keys(MIME_TYPES).find((ext) => MIME_TYPES[ext] === mimeType) ?? "";
+const humanSize = (n: number) => (n < 1024 * 1024 ? `${n ? Math.max(1, Math.round(n / 1024)) : 0} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+const BATCH_SCAN_PAGES = 50; // 20 messages per page
+
+/** Have Beeper fetch a media URL into its cache; returns the cached file's path. */
+async function fetchToCache(url: string): Promise<string> {
+  const result = await api<{ srcURL?: string; error?: string }>("/assets/download", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (result.error || !result.srcURL) throw new BeeperError(`Download failed: ${result.error ?? "no srcURL returned"}`);
+  return toLocalPath(result.srcURL);
+}
+
+/** Every photo/video/file of one chat in a period, saved into one folder, oldest first. */
+async function downloadBatch(args: {
+  chatID: string;
+  since: string;
+  until?: string;
+  mediaTypes?: MediaKind[];
+  maxFiles?: number;
+  outputDir?: string;
+}) {
+  const since = parseDate("since", args.since);
+  const until = args.until ? parseDate("until", args.until) : undefined;
+  if (until && until <= since) throw new BeeperError("`until` must be after `since`.");
+  const kinds = new Set<MediaKind>(args.mediaTypes?.length ? args.mediaTypes : ["image", "video"]);
+  const maxFiles = args.maxFiles ?? 30;
+
+  // `since` is inclusive (Beeper's dateAfter is not), so `nextSince` can be passed back as is.
+  const params = new URLSearchParams({ chatIDs: args.chatID, dateAfter: new Date(+since - 1).toISOString(), limit: "20" });
+  if (until) params.set("dateBefore", until.toISOString());
+  for (const k of kinds) params.append("mediaTypes", k);
+
+  const found: { m: ApiMessage; index: number; a: ApiAttachment }[] = [];
+  const chats = new Set<string>();
+  let title: string | undefined;
+  let localID: string | undefined;
+  let cursor: string | undefined;
+  let complete = false;
+  for (let page = 0; page < BATCH_SCAN_PAGES; page++) {
+    const q = new URLSearchParams(params);
+    if (cursor) q.set("cursor", cursor), q.set("direction", "before");
+    const res = await api<Page<ApiMessage> & { chats?: Record<string, { title?: string; localChatID?: string }> }>(`/messages/search?${q}`);
+    for (const c of Object.values(res.chats ?? {})) (title ??= c.title), (localID ??= c.localChatID);
+    for (const m of res.items ?? []) {
+      if (m.chatID) chats.add(m.chatID);
+      if (m.isDeleted) continue;
+      (m.attachments ?? []).forEach((a, index) => {
+        if (a.id && !a.isSticker && kinds.has(kindOf(a))) found.push({ m, index, a });
+      });
+    }
+    if (!res.items?.length || !res.hasMore || !res.oldestCursor) {
+      complete = true;
+      break;
+    }
+    cursor = res.oldestCursor;
+  }
+  const other = [...chats].find((id) => id !== args.chatID && localID !== args.chatID);
+  if (chats.size > 1 || other) throw new BeeperError("Beeper returned messages from another chat; nothing was downloaded.");
+  if (!complete) {
+    throw new BeeperError(`More than ${BATCH_SCAN_PAGES * 20} messages with media in that period: pass a shorter one (until).`);
+  }
+  if (!found.length) return { saved: 0, files: [], note: "No matching photos, videos or files in that period." };
+  found.sort((x, y) => (x.m.timestamp ?? "").localeCompare(y.m.timestamp ?? "") || Number(x.m.id) - Number(y.m.id) || x.index - y.index);
+  const todo = found.slice(0, maxFiles);
+
+  // The chat title is chosen by other people: it only names one folder inside the download folder.
+  const folderName = safeFileName(`${(title ?? "chat").replace(/[\\/]/g, "-").slice(0, 50)} ${localID ?? ""}`, "chat");
+  const folder = resolve(args.outputDir ? expandHome(args.outputDir) : join(DOWNLOAD_DIR, folderName));
+  if (!args.outputDir && dirname(folder) !== DOWNLOAD_DIR) throw new BeeperError("Refusing unsafe folder name.");
+  await mkdir(folder, { recursive: true, mode: 0o700 });
+
+  const files: string[] = [];
+  const failed: string[] = [];
+  let alreadySaved = 0;
+  let totalBytes = 0;
+  // One at a time: Beeper may have to fetch each file from the network first.
+  for (const { m, index, a } of todo) {
+    const original = safeFileName(a.fileName, `${kindOf(a)}${extFor(a.mimeType)}`);
+    const name = safeFileName(`${fileTime(m.timestamp)}_${safeFileName(m.id)}${index ? `-${index + 1}` : ""}_${original}`);
+    const target = join(folder, name);
+    const label = `${localTime(m.timestamp)} · ${m.isSender ? ME : outsideName(m.senderName ?? m.senderID, 40)} · #${m.id}`;
+    try {
+      if (dirname(target) !== folder) throw new BeeperError("unsafe file name");
+      if (await stat(target).then(() => true, () => false)) {
+        alreadySaved++; // saved by an earlier call into the same folder
+        continue;
+      }
+      await copyFile(await fetchToCache(a.id!), target, constants.COPYFILE_EXCL);
+      const { size } = await stat(target);
+      totalBytes += size;
+      files.push(`${label} → ${name} (${humanSize(size)})`);
+    } catch (err) {
+      failed.push(`${label}: ${clip(err instanceof Error ? err.message : String(err), 200)}`);
+    }
+  }
+  return {
+    folder,
+    saved: files.length,
+    ...(alreadySaved ? { alreadySaved } : {}),
+    ...(files.length ? { totalSize: humanSize(totalBytes) } : {}),
+    files,
+    ...(failed.length ? { failed } : {}),
+    ...(found.length > todo.length
+      ? { notDownloadedYet: found.length - todo.length, nextSince: found[todo.length].m.timestamp, howToContinue: "Call again with since: nextSince and the same folder (outputDir) to get the rest." }
+      : {}),
+    note: DATA_NOTE,
+  };
+}
+
 server.registerTool(
   "download_attachment",
   {
-    title: "Download a Beeper attachment",
+    title: "Download Beeper attachments",
     description:
       "Save a message attachment (video, image, audio, document) to a local file and return its path. " +
       "By default it goes to a new file in the addon's download folder; writing elsewhere (outputPath) needs the user's confirmation. " +
       "Identify it with `url` (an mxc:// or localmxc:// URL, or a beeper-mcp://attachments/... URI " +
-      "as returned by the official Beeper MCP), or with `chatID` + `messageID` (+ `index` when a message has several attachments).",
+      "as returned by the official Beeper MCP), or with `chatID` + `messageID` (+ `index` when a message has several attachments).\n" +
+      "Batch: with `chatID` + `since` (+ `until`) instead of a message, it saves every photo and video (or `mediaTypes`) of that chat " +
+      "in that period into one folder, oldest first, named by date and message ID, and returns one short line per file " +
+      "(time, sender, message ID → file name). At most `maxFiles` per call (default 30): `nextSince` gives where to continue. " +
+      "Files already in the folder are skipped, so a repeated call only fetches what is missing.",
     inputSchema: {
       url: z.string().optional().describe("mxc://, localmxc:// or beeper-mcp://attachments/{chatID}/{messageID}/{index}"),
-      chatID: z.string().optional().describe("Chat ID (or local chat ID) of the message"),
+      chatID: z.string().optional().describe("Chat ID (or local chat ID) of the message, or of the chat to download from (batch)"),
       messageID: z.string().optional().describe("ID of the message holding the attachment"),
       index: z.number().int().min(0).optional().describe("Attachment index in the message (default 0)"),
       outputPath: z
@@ -273,24 +398,36 @@ server.registerTool(
         .optional()
         .describe(`Where to save the file (confirm with the user first). Defaults to a new file in ${DOWNLOAD_DIR}`),
       overwrite: z.boolean().optional().describe("Replace outputPath if it already exists (default false). Replaces the user's file: confirm first"),
+      since: z.string().optional().describe("Batch: ISO time; download the chat's media sent from then on (inclusive)"),
+      until: z.string().optional().describe("Batch: ISO time; only media sent before it. Default: now"),
+      mediaTypes: z.array(z.enum(MEDIA_KINDS)).min(1).optional().describe("Batch: which kinds (default [\"image\", \"video\"]; \"file\" = documents, audio…). Stickers are skipped"),
+      maxFiles: z.number().int().min(1).max(200).optional().describe("Batch: at most this many files per call (default 30)"),
+      outputDir: z
+        .string()
+        .optional()
+        .describe(`Batch: folder to save into (confirm with the user first). Default: one folder per chat in ${DOWNLOAD_DIR}`),
     },
     // destructive because `overwrite` can replace a file: clients should always ask.
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   },
   async (args) => {
     try {
-      const { url, attachment } = await resolveMediaURL(args);
-      const result = await api<{ srcURL?: string; error?: string }>("/assets/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-      if (result.error || !result.srcURL) throw new BeeperError(`Download failed: ${result.error ?? "no srcURL returned"}`);
+      const batchOnly = ["until", "mediaTypes", "maxFiles", "outputDir"] as const;
+      if (args.since !== undefined) {
+        if (!args.chatID?.trim()) throw new BeeperError("A batch download (since) needs `chatID`.");
+        if (args.url || args.messageID || args.index !== undefined || args.outputPath || args.overwrite) {
+          throw new BeeperError("`since` downloads a whole period: don't combine it with url, messageID, index, outputPath or overwrite (use outputDir for the folder).");
+        }
+        return ok(await downloadBatch({ ...args, chatID: args.chatID, since: args.since }), true);
+      }
+      const misplaced = batchOnly.filter((k) => args[k] !== undefined);
+      if (misplaced.length) throw new BeeperError(`${misplaced.join(", ")}: only for a batch download, which needs \`since\` and chatID.`);
 
-      const cached = toLocalPath(result.srcURL);
+      const { url, attachment } = await resolveMediaURL(args);
+      const cached = await fetchToCache(url);
       // The attachment's name is chosen by the sender: never let it pick the directory.
       const name = safeFileName(attachment?.fileName ?? basename(cached));
-      const target = resolve(args.outputPath ?? join(DOWNLOAD_DIR, `${Date.now()}-${name}`));
+      const target = resolve(args.outputPath ? expandHome(args.outputPath) : join(DOWNLOAD_DIR, `${Date.now()}-${name}`));
       if (!args.outputPath && dirname(target) !== DOWNLOAD_DIR) throw new BeeperError(`Refusing unsafe attachment name: ${name}`);
       await mkdir(dirname(target), { recursive: true, mode: 0o700 });
       try {

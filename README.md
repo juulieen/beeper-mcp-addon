@@ -14,7 +14,7 @@ The Beeper Client API that runs alongside it already supports all of that. This 
 
 | Tool | What it does |
 |---|---|
-| `download_attachment` | Saves a message attachment (video, image, audio, document) to disk and returns the local path |
+| `download_attachment` | Saves a message attachment (video, image, audio, document) to disk and returns the local path; or every photo and video of a chat over a period, into one folder |
 | `send_file` | Uploads a local file and sends it to any chat, with an optional caption |
 | `search_contacts` | Finds people on an account (WhatsApp, Signal…), including ones you've never chatted with; phone numbers, emails and @usernames are looked up exactly |
 | `start_chat` | Opens a direct chat with someone and returns its `chatID`, reusing the existing chat if there is one |
@@ -110,7 +110,7 @@ There is no telemetry: the addon never reports usage or installs anywhere.
 | `BEEPER_ACCESS_TOKEN` | token saved by `login` | Beeper Desktop API token; overrides the saved one |
 | `BEEPER_URL` | `http://localhost:23373` | Base URL of the Beeper Client API |
 | `BEEPER_TOKEN_FILE` | — | Force a plain token file instead of the system secret store |
-| `BEEPER_DOWNLOAD_DIR` | `~/.cache/beeper-mcp-addon/downloads` on Linux, `<temp>/beeper-mcp-addon/downloads` elsewhere | Where downloads go when no `outputPath` is given |
+| `BEEPER_DOWNLOAD_DIR` | `~/.cache/beeper-mcp-addon/downloads` on Linux, `<temp>/beeper-mcp-addon/downloads` elsewhere | Where downloads go when no `outputPath` (one file) or `outputDir` (a period, one subfolder per chat) is given |
 | `BEEPER_ADDON_NO_UPDATE_CHECK` | — | Set to `1` to never check for a new version |
 | `BEEPER_FFMPEG` | `ffmpeg` on `PATH` | ffmpeg used to fix videos before sending (ffprobe is looked up next to it) |
 | `BEEPER_FFPROBE` | next to `BEEPER_FFMPEG`, else `ffprobe` on `PATH` | ffprobe used to check videos before sending |
@@ -124,7 +124,21 @@ Identify the attachment in any of these ways:
 - `url`: an `mxc://` / `localmxc://` media URL, **or** a `beeper-mcp://attachments/{chatID}/{messageID}/{index}` URI as printed by the official Beeper MCP's search results
 - `chatID` + `messageID` (+ `index` if the message has several attachments)
 
-By default it's saved as a new file in the download folder (`BEEPER_DOWNLOAD_DIR`); the sender's file name is sanitized, so it can never choose the folder. `outputPath` saves it elsewhere, without replacing an existing file unless `overwrite: true` (which replaces your file: your client should ask first). Returns `{ path, fileName, mimeType, sizeBytes }`.
+By default it's saved as a new file in the download folder (`BEEPER_DOWNLOAD_DIR`); the sender's file name is sanitized, so it can never choose the folder. `outputPath` saves it elsewhere (`~/` means your home folder), without replacing an existing file unless `overwrite: true` (which replaces your file: your client should ask first). Returns `{ path, fileName, mimeType, sizeBytes }`.
+
+**A whole period at once:** pass `chatID` + `since` (+ `until`) instead of a message, and it saves every photo and video of that chat sent in that period into one folder, oldest first. Options:
+
+- `mediaTypes`: which kinds, among `image`, `video` and `file` (documents, audio…). Default: `["image", "video"]`. Stickers are skipped.
+- `maxFiles`: at most this many files per call, from 1 to 200. Default: 30.
+- `outputDir`: the folder to save into. Default: one folder per chat in the download folder. Your client should ask you before saving elsewhere.
+
+Files are named by date and message ID (`2026-10-11_104635_75649_photo.jpg`), so the folder sorts in time order. A file already in the folder is skipped, never replaced. The result gives one short line per file, with time, sender and message ID:
+
+```
+2026-10-11 10:46 · Maxime · #75649 → 2026-10-11_104635_75649_photo.jpg (6.4 MB)
+```
+
+When there are more files than `maxFiles`, the result gives `nextSince`. Call again with it and the same folder to get the rest.
 
 ### `send_file`
 
@@ -180,7 +194,11 @@ It's made for periodic checks ("anything new in the club's groups since this mor
 
 > "Find the videos my dad posted in the family group in June and send the French ones to him."
 
-The assistant searches with the official Beeper MCP, calls `download_attachment` on each video (for instance to transcribe and check the language), then `send_file` to forward the right ones.
+The assistant gets the June videos of that group with one `download_attachment` call (`since`, `until`, `mediaTypes: ["video"]`), checks them (for instance it transcribes them to find the language), then sends the right ones with `send_file`.
+
+> "Put all the photos and videos from the club's group in October in ~/Pictures/club-october."
+
+One `download_attachment` call with `chatID`, `since`, `until` and `outputDir`, then more calls with `nextSince` if there are more than 30.
 
 > "Every hour, tell me if someone in the club's groups asked something I haven't answered."
 

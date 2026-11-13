@@ -41,7 +41,9 @@ test("attachment names chosen by the sender can't pick the folder", async () => 
 });
 
 test("compact message lines for get_new_messages", async () => {
-  const { messageLine, plainText, reactionsByPeople, isNoise } = await import("../dist/messages.js");
+  const { messageLine, plainText, reactionsByPeople, isNoise, fileTime } = await import("../dist/messages.js");
+  assert.match(fileTime("2026-10-11T08:46:35Z"), /^2026-10-1\d_\d{6}$/);
+  assert.equal(fileTime("not a date"), "unknown-date");
   assert.equal(
     plainText('<p>Merci <a href="https://matrix.to/#/@x:beeper.local">Florian</a><br>à lundi</p>'),
     "Merci @Florian\nà lundi",

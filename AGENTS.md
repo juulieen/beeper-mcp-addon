@@ -23,7 +23,7 @@ The `pre-commit` hook (`scripts/hooks/`, enabled by `npm install`) runs `check` 
 - `src/auth.ts`: OAuth with Beeper (PKCE, dynamic registration), `getToken`, `tokenExpiry` (tokens last 30 days), `savedScope` (a renewal asks for the same access level, never more), `status`.
 - `src/secret-store.ts`: token in macOS Keychain / Windows DPAPI / Linux Secret Service, fallback file 0600; moves a file token into a keyring once one exists.
 - `src/install.ts`: adds/removes the server in 8 MCP clients (JSON, VS Code `servers`, Codex TOML, Claude Code CLI).
-- `src/messages.ts`: compact one-line view of messages and reactions for the agent (`get_new_messages`, `get_reactions`).
+- `src/messages.ts`: compact one-line view of messages and reactions for the agent (`get_new_messages`, `get_reactions`), `fileTime` (file names of batch downloads).
 - `src/listen.ts`: Beeper WebSocket (`/v1/ws`) + history, shared by `watch` and `wait_for_message`.
 - `src/watch.ts`: `watch` command (also the `beeper-watch` bin). `src/video.ts`: ffprobe check + ffmpeg conversion. `src/update.ts`: once-a-day update notice. `src/media.ts`: `beeper-mcp://` URIs, `safeFileName` (sender-chosen attachment names), `WORK_DIR` (per-user folder for downloads and converted videos: `~/.cache/beeper-mcp-addon` on Linux), `clip` (limits text from outside).
 - `manifest.json`: Claude Desktop `.mcpb` (`npm run bundle`). `server.json`: MCP registry entry.
@@ -52,7 +52,7 @@ The `pre-commit` hook (`scripts/hooks/`, enabled by `npm install`) runs `check` 
 - `wait_for_message` with `since` returns the **oldest** match after that time.
 - Tokens last **30 days** and can't be refreshed (`grant_types_supported: authorization_code` only). `GET /oauth/userinfo` gives `exp`.
 - Message text is light HTML (`<p>`, `<br>`, mentions as `<a href="https://matrix.to/#/…">Name</a>`): `plainText()` in `messages.ts` cleans it.
-- `GET /v1/messages/search` accepts `limit` ≤ 20 (more → "400 Invalid input"); `mediaTypes` has no `audio`. `/chats/search` `query` matches words of the title.
+- `GET /v1/messages/search` accepts `limit` ≤ 20 (more → "400 Invalid input"); `mediaTypes` has no `audio`. It works without `query` (used for batch downloads by `chatIDs` + `mediaTypes` + dates). `dateAfter` and `dateBefore` are both exclusive. Attachment `type` is `img`, `video`, `audio` or `unknown`; stickers have `isSticker`. An unknown chat ID gives 404. `/chats/search` `query` matches words of the title.
 - Reactions carry a `participantID` only: names come from the chat's participants (`GET /v1/chats/{id}?maxParticipantCount=500`). Reaction events also appear as messages of type `REACTION`; skip them.
 - Many group chats are muted: don't exclude muted chats by default.
 

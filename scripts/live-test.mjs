@@ -4,7 +4,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BASE_URL, getToken } from "../dist/auth.js";
@@ -52,6 +52,7 @@ async function sendAndConfirm(filePath, text, fileName = text.endsWith("evil nam
   throw new Error(`sent message "${text}" not found`);
 }
 
+const startedAt = new Date(Date.now() - 5000).toISOString();
 try {
   const doc = join(dir, "live-test.txt");
   writeFileSync(doc, `beeper-mcp-addon live test ${new Date().toISOString()}\n`);
@@ -67,6 +68,17 @@ try {
   const e = await call("download_attachment", { chatID, messageID: evil.messageID });
   if (!e.path.includes("beeper-mcp-addon") || e.path.includes("..")) throw new Error(`unsafe download path: ${e.path}`);
   step(`download_attachment keeps a hostile file name in the download folder (${e.path})`);
+
+  // Batch: both test files of this run, into one folder; a second call skips them.
+  const batchDir = join(dir, "batch");
+  const batch = { chatID, since: startedAt, mediaTypes: ["file"], outputDir: batchDir };
+  const b1 = await call("download_attachment", batch);
+  const names = readdirSync(batchDir);
+  if (b1.saved < 2 || names.length !== b1.saved || !b1.files.some((l) => l.includes(`#${evil.messageID}`))) throw new Error(`batch download: ${JSON.stringify(b1)}`);
+  if (names.some((n) => n.includes("..") || n.includes("/"))) throw new Error(`unsafe batch file name: ${names}`);
+  const b2 = await call("download_attachment", batch);
+  if (b2.saved !== 0 || b2.alreadySaved !== b1.saved) throw new Error(`batch download again: ${JSON.stringify(b2)}`);
+  step(`download_attachment batch saves a period into one folder (${b1.saved} files), and skips them the second time`);
 
   // Reactions, edit, and catching up, on the first test message.
   await call("react", { chatID, messageID: a.messageID, reaction: "👍" });

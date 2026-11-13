@@ -20,7 +20,16 @@ export type ApiMessage = {
   isDeleted?: boolean;
   isHidden?: boolean;
   linkedMessageID?: string;
-  attachments?: { type?: string; fileName?: string; isVoiceNote?: boolean; duration?: number }[];
+  attachments?: {
+    id?: string;
+    type?: string;
+    fileName?: string;
+    mimeType?: string;
+    fileSize?: number;
+    isVoiceNote?: boolean;
+    isSticker?: boolean;
+    duration?: number;
+  }[];
   reactions?: Reaction[];
 };
 export type Participant = { id: string; fullName?: string; username?: string; phoneNumber?: string; isSelf?: boolean };
@@ -32,6 +41,14 @@ export function localTime(iso: string | undefined): string {
   if (Number.isNaN(+d)) return "?";
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** "2026-11-13_091205": local time for file names, so a folder of downloads sorts in time order. */
+export function fileTime(iso: string | undefined): string {
+  const d = new Date(iso ?? "");
+  if (Number.isNaN(+d)) return "unknown-date";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
 /** Beeper returns rich text as light HTML (<p>, <br>); turn it back into plain text. */
