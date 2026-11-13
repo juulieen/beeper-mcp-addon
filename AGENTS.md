@@ -55,6 +55,7 @@ The `pre-commit` hook (`scripts/hooks/`, enabled by `npm install`) runs `check` 
 - `GET /v1/messages/search` accepts `limit` ≤ 20 (more → "400 Invalid input"); `mediaTypes` has no `audio`. It works without `query` (used for batch downloads by `chatIDs` + `mediaTypes` + dates). `dateAfter` and `dateBefore` are both exclusive. Attachment `type` is `img`, `video`, `audio` or `unknown`; stickers have `isSticker`. An unknown chat ID gives 404. `/chats/search` `query` matches words of the title.
 - Reactions carry a `participantID` only: names come from the chat's participants (`GET /v1/chats/{id}?maxParticipantCount=500`). Reaction events also appear as messages of type `REACTION`; skip them.
 - Many group chats are muted: don't exclude muted chats by default.
+- `/chats/search?lastActivityAfter=` also returns chats with no `lastActivity` (dozens, with no recent message): filter them out.
 
 ## Reviews (before ending a turn)
 

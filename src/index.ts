@@ -766,7 +766,8 @@ server.registerTool(
         if (chatQuery) q.set("query", chatQuery);
         for (const a of accountIDs ?? []) q.append("accountIDs", a);
         const page = await api<Page<ChatInfo>>(`/chats/search?${q}`);
-        chats = page.items ?? [];
+        // Beeper also returns chats with no lastActivity at all (empty or never synced): nothing new there.
+        chats = (page.items ?? []).filter((c) => c.lastActivity && new Date(c.lastActivity) > after);
         moreChats = Boolean(page.hasMore);
       }
       chats.sort((a, b) => (b.lastActivity ?? "").localeCompare(a.lastActivity ?? ""));
