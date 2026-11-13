@@ -14,7 +14,7 @@ export function parseAttachmentURI(uri: string): { chatID: string; messageID: st
 export function safeFileName(name: string | undefined, fallback = "attachment"): string {
   const base = (name ?? "").split(/[\\/]/).pop() ?? "";
   const clean = base
-    .replace(/[\u0000-\u001f\u007f<>:"|?*]/g, "_")
+    .replace(/[\u0000-\u001f\u007f\u0085\u200e\u200f\u2028-\u202e\u2066-\u2069<>:"|?*]/g, "_")
     .replace(/^[.\s]+/, "")
     .replace(/[.\s]+$/, "")
     .slice(0, 200);

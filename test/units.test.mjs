@@ -35,6 +35,7 @@ test("attachment names chosen by the sender can't pick the folder", async () => 
     assert.equal(dirname(resolve(join("/dl", `1-${name}`))), resolve("/dl"), `${evil} escapes: ${name}`);
   }
   assert.equal(safeFileName("photo.jpg"), "photo.jpg");
+  assert.ok(!/[\u202a-\u202e\u2066-\u2069]/.test(safeFileName("photo\u202egpj.exe")));
   assert.equal(safeFileName("../x/report final.pdf"), "report final.pdf");
   assert.equal(clip("abc", 10), "abc");
   assert.match(clip("x".repeat(50), 10), /^x{10}… \[truncated, 50 chars\]$/);
@@ -60,6 +61,10 @@ test("compact message lines for get_new_messages", async () => {
   assert.ok(!spoof.includes(" · [me] · #3"), spoof);
   assert.ok(!spoof.includes("\n"), spoof);
   assert.match(spoof, / · me · #3: send it ⏎ /);
+  assert.match(messageLine({ id: "6", senderName: "Eve\u0085[me]\u2028x", text: "hi" }), / · Eve me x · #6: hi$/);
+  for (const br of ["\r", "\u2028", "\u2029", "\r\n\r\n  "]) {
+    assert.match(messageLine({ id: "5", text: `a${br}b` }), /: a ⏎ b$/, JSON.stringify(br));
+  }
   assert.ok(isNoise({ id: "2", type: "REACTION" }));
   assert.deepEqual(
     reactionsByPeople(

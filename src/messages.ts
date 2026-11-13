@@ -78,7 +78,7 @@ export function plainText(text: string | undefined): string {
  */
 export const ME = "[me]";
 export const outsideName = (name: string | undefined, max = 80) =>
-  clip((name ?? "?").replace(/[[\]\u00b7\r\n]/g, " ").replace(/\s+/g, " ").trim() || "?", max)!;
+  clip((name ?? "?").replace(/[[\]\u00b7\r\n\v\f\u0085\u200e\u200f\u2028-\u202e\u2066-\u2069]/g, " ").replace(/\s+/g, " ").trim() || "?", max)!;
 
 /** Messages that only exist to carry a reaction or a hidden event: not worth a line. */
 export const isNoise = (m: ApiMessage) => m.isHidden || m.type === "REACTION";
@@ -108,7 +108,12 @@ export function messageLine(m: ApiMessage, maxText = 1000): string {
     .join(" ");
   // Cut the raw text before cleaning it: the cleaning cost must not depend on what a sender chose to send.
   const raw = m.text && m.text.length > maxText * 4 ? m.text.slice(0, maxText * 4) : m.text;
-  const cleaned = plainText(raw).replace(/\s*(\r?\n)+\s*/g, " ⏎ ");
+  // Split on every kind of line break (linear time), so a message can't look like several lines.
+  const cleaned = plainText(raw)
+    .split(/\r\n|[\r\n\v\f\u0085\u2028\u2029]/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join(" ⏎ ");
   const text = m.isDeleted
     ? "[deleted]"
     : cleaned.length > maxText || raw !== m.text

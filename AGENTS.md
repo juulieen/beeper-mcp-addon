@@ -20,7 +20,7 @@ The `pre-commit` hook (`scripts/hooks/`, enabled by `npm install`) runs `check` 
 ## Files
 
 - `src/index.ts`: CLI dispatch (`install`, `login`, `status`, `watch`…), then the MCP server: token renewal (expiry or 401 → approve again in Beeper, same scope, retried once; a token approved during this run is never asked for again), instructions, the 10 tools, the wrapper that adds the update and token-expiry notices.
-- `src/auth.ts`: OAuth with Beeper (PKCE, dynamic registration), `getToken`, `tokenExpiry` (tokens last 30 days), `savedScope` (a renewal asks for the same access level, never more), `status`.
+- `src/auth.ts`: OAuth with Beeper (PKCE, dynamic registration), `getToken`, `tokenInfo` / `tokenExpiry` (expiry and scope from `/oauth/userinfo`; tokens last 30 days), `savedScope` (a renewal asks for the same access level, never more; a token saved without its scope gets it from `tokenInfo` while it still works), `status`.
 - `src/secret-store.ts`: token in macOS Keychain / Windows DPAPI / Linux Secret Service, fallback file 0600; moves a file token into a keyring once one exists.
 - `src/install.ts`: adds/removes the server in 8 MCP clients (JSON, VS Code `servers`, Codex TOML, Claude Code CLI).
 - `src/messages.ts`: compact one-line view of messages and reactions for the agent (`get_new_messages`, `get_reactions`), `fileTime` (file names of batch downloads).
@@ -50,7 +50,7 @@ The `pre-commit` hook (`scripts/hooks/`, enabled by `npm install`) runs `check` 
 - `send` returns a `pendingMessageID` (`~…`), which can't be deleted: get the final ID from the chat or `wait_for_message`.
 - `DELETE` returns 204 with an empty body. `/assets/upload` needs the MIME type, or videos arrive as generic files.
 - `wait_for_message` with `since` returns the **oldest** match after that time.
-- Tokens last **30 days** and can't be refreshed (`grant_types_supported: authorization_code` only). `GET /oauth/userinfo` gives `exp`.
+- Tokens last **30 days** and can't be refreshed (`grant_types_supported: authorization_code` only). `GET /oauth/userinfo` gives `exp` and `scope` (some older tokens have no `exp`).
 - Message text is light HTML (`<p>`, `<br>`, mentions as `<a href="https://matrix.to/#/…">Name</a>`): `plainText()` in `messages.ts` cleans it.
 - `GET /v1/messages/search` accepts `limit` ≤ 20 (more → "400 Invalid input"); `mediaTypes` has no `audio`. It works without `query` (used for batch downloads by `chatIDs` + `mediaTypes` + dates). `dateAfter` and `dateBefore` are both exclusive. Attachment `type` is `img`, `video`, `audio` or `unknown`; stickers have `isSticker`. An unknown chat ID gives 404. `/chats/search` `query` matches words of the title.
 - Reactions carry a `participantID` only: names come from the chat's participants (`GET /v1/chats/{id}?maxParticipantCount=500`). Reaction events also appear as messages of type `REACTION`; skip them.

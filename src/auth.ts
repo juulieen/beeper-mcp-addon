@@ -178,15 +178,21 @@ export async function logout() {
  * When a token stops working. Beeper's tokens last 30 days and can't be refreshed: after that,
  * the user approves access again. Undefined if Beeper doesn't say (or isn't reachable).
  */
-export async function tokenExpiry(token: string): Promise<Date | undefined> {
+/** "read" or "read write" as Beeper reports it; anything else is ignored. */
+const knownScope = (scope: unknown) =>
+  typeof scope === "string" && /^(?:read|write)(?: (?:read|write))?$/.test(scope.trim()) ? scope.trim() : undefined;
+
+export async function tokenInfo(token: string): Promise<{ expiresAt?: Date; scope?: string } | undefined> {
   try {
     const res = await fetch(`${BASE_URL}/oauth/userinfo`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(3000) });
-    const exp = res.ok ? ((await res.json()) as { exp?: number }).exp : undefined;
-    return exp ? new Date(exp * 1000) : undefined;
+    if (!res.ok) return undefined;
+    const { exp, scope } = (await res.json()) as { exp?: number; scope?: string };
+    return { expiresAt: exp ? new Date(exp * 1000) : undefined, scope: knownScope(scope) };
   } catch {
     return undefined;
   }
 }
+export const tokenExpiry = async (token: string) => (await tokenInfo(token))?.expiresAt;
 
 export async function status() {
   const token = await getToken();

@@ -25,7 +25,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-import { BASE_URL, NO_TOKEN_HELP, backend, describeBackend, getToken, login, logout, savedScope, status, tokenExpiry } from "./auth.js";
+import { BASE_URL, NO_TOKEN_HELP, backend, describeBackend, getToken, login, logout, savedScope, status, tokenInfo } from "./auth.js";
 import { install } from "./install.js";
 import { convertVideo, videoProblems } from "./video.js";
 import { VERSION, updateNotice } from "./update.js";
@@ -93,10 +93,19 @@ let EXPIRES: Promise<Date | undefined> | undefined;
 let pendingLogin: Promise<string> | undefined;
 let hadToken = Boolean(TOKEN);
 // A renewal asks for the access level the user chose before (e.g. read only), never more.
-let SCOPE = (await savedScope()) ?? (TOKEN ? "read" : "read write");
+// A token saved without its scope (older versions, BEEPER_TOKEN_FILE) gets it from Beeper while it still works.
+const STORED_SCOPE = await savedScope();
+let SCOPE = STORED_SCOPE ?? (TOKEN ? "read" : "read write");
+let scopeKnown = STORED_SCOPE !== undefined || !TOKEN;
 let approvedThisRun: string | undefined;
 const FROM_ENV = Boolean(process.env.BEEPER_ACCESS_TOKEN?.trim());
-const expiry = () => (TOKEN ? (EXPIRES ??= tokenExpiry(TOKEN)) : Promise.resolve(undefined));
+const expiry = () =>
+  TOKEN
+    ? (EXPIRES ??= tokenInfo(TOKEN).then((info) => {
+        if (!scopeKnown && info?.scope) (SCOPE = info.scope), (scopeKnown = true);
+        return info?.expiresAt;
+      }))
+    : Promise.resolve(undefined);
 
 async function token(): Promise<string> {
   if (TOKEN && ((await expiry())?.getTime() ?? Infinity) <= Date.now() + 60_000) forgetToken();
@@ -107,6 +116,7 @@ async function token(): Promise<string> {
   pendingLogin ??= login({ scope: SCOPE })
     .then((t) => {
       SCOPE = t.scope ?? SCOPE;
+      scopeKnown = true;
       hadToken = true;
       return (approvedThisRun = TOKEN = t.access_token);
     })
@@ -264,6 +274,12 @@ type MediaKind = (typeof MEDIA_KINDS)[number];
 type ApiAttachment = NonNullable<ApiMessage["attachments"]>[number];
 const kindOf = (a: ApiAttachment): MediaKind => (a.type === "img" ? "image" : a.type === "video" ? "video" : "file");
 const extFor = (mimeType: string | undefined) => Object.keys(MIME_TYPES).find((ext) => MIME_TYPES[ext] === mimeType) ?? "";
+/** Cut a file name to `max` characters, keeping its extension. */
+const shortName = (name: string, max: number) => {
+  if (name.length <= max) return name;
+  const ext = extname(name).slice(0, 12);
+  return `${name.slice(0, max - ext.length - 1)}…${ext}`;
+};
 const humanSize = (n: number) => (n < 1024 * 1024 ? `${n ? Math.max(1, Math.round(n / 1024)) : 0} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 const BATCH_SCAN_PAGES = 50; // 20 messages per page
 
@@ -343,7 +359,7 @@ async function downloadBatch(args: {
   let totalBytes = 0;
   // One at a time: Beeper may have to fetch each file from the network first.
   for (const { m, index, a } of todo) {
-    const original = safeFileName(a.fileName, `${kindOf(a)}${extFor(a.mimeType)}`);
+    const original = shortName(safeFileName(a.fileName, `${kindOf(a)}${extFor(a.mimeType)}`), 80);
     const name = safeFileName(`${fileTime(m.timestamp)}_${safeFileName(m.id)}${index ? `-${index + 1}` : ""}_${original}`);
     const target = join(folder, name);
     const label = `${localTime(m.timestamp)} · ${m.isSender ? ME : outsideName(m.senderName ?? m.senderID, 40)} · #${m.id}`;
