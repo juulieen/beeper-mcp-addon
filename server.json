@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.juulieen/beeper-mcp-addon",
   "title": "Beeper MCP Addon",
-  "description": "Files and new conversations for Beeper's MCP: send/download attachments, find contacts, start chats.",
+  "description": "Files, new chats, catching up, reactions and edits for Beeper Desktop's MCP (unofficial companion).",
   "repository": {
     "url": "https://github.com/juulieen/beeper-mcp-addon",
     "source": "github"

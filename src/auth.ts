@@ -34,6 +34,17 @@ export async function getToken(explicitFile?: string): Promise<string | undefine
 
 export { describe as describeBackend, backend } from "./secret-store.js";
 
+/** Access level of the saved token ("read" or "read write"), so a renewal asks for the same, never more. */
+export async function savedScope(): Promise<string | undefined> {
+  const raw = await readSecret().catch(() => undefined);
+  if (!raw?.startsWith("{")) return undefined;
+  try {
+    return (JSON.parse(raw) as StoredToken).scope;
+  } catch {
+    return undefined;
+  }
+}
+
 export const NO_TOKEN_HELP =
   "No Beeper token found. Run `npx beeper-mcp-addon login` (opens Beeper to approve access),\n" +
   "or set BEEPER_ACCESS_TOKEN to a token from Beeper Desktop > Settings > Developers.";
@@ -163,6 +174,20 @@ export async function logout() {
   return Boolean(token);
 }
 
+/**
+ * When a token stops working. Beeper's tokens last 30 days and can't be refreshed: after that,
+ * the user approves access again. Undefined if Beeper doesn't say (or isn't reachable).
+ */
+export async function tokenExpiry(token: string): Promise<Date | undefined> {
+  try {
+    const res = await fetch(`${BASE_URL}/oauth/userinfo`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(3000) });
+    const exp = res.ok ? ((await res.json()) as { exp?: number }).exp : undefined;
+    return exp ? new Date(exp * 1000) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function status() {
   const token = await getToken();
   if (!token) return { loggedIn: false as const };
@@ -171,12 +196,13 @@ export async function status() {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ token }),
   }).catch(() => undefined);
-  const info = res?.ok ? ((await res.json()) as { active?: boolean; scope?: string }) : undefined;
+  const info = res?.ok ? ((await res.json()) as { active?: boolean; scope?: string; exp?: number }) : undefined;
   return {
     loggedIn: true as const,
     source: process.env.BEEPER_ACCESS_TOKEN?.trim() ? "BEEPER_ACCESS_TOKEN" : describe(await backend()),
     active: info?.active,
     scope: info?.scope,
+    expiresAt: info?.exp ? new Date(info.exp * 1000) : info?.active ? await tokenExpiry(token) : undefined,
     reachable: Boolean(res),
   };
 }

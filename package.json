@@ -1,7 +1,7 @@
 {
   "name": "beeper-mcp-addon",
   "version": "0.3.1",
-  "description": "Files and new conversations for Beeper's MCP: send/download attachments, find contacts, start chats (unofficial companion to Beeper Desktop's MCP)",
+  "description": "Files, new chats, catching up, reactions and edits for Beeper's MCP (unofficial companion to Beeper Desktop's MCP)",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

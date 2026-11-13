@@ -1,6 +1,6 @@
 # beeper-mcp-addon — notes for agents
 
-MCP server published on npm that adds what Beeper Desktop's built-in MCP lacks: files, new chats, deleting and waiting for messages. It runs **next to** the official Beeper MCP and only talks to Beeper Desktop's local Client API (`http://localhost:23373`, OpenAPI at `/v1/spec`). Public repo, used by other people: everything user-facing is in English.
+MCP server published on npm that adds what Beeper Desktop's built-in MCP lacks: files, new chats, catching up on many chats, reactions, editing, deleting and waiting for messages. It runs **next to** the official Beeper MCP and only talks to Beeper Desktop's local Client API (`http://localhost:23373`, OpenAPI at `/v1/spec`). Public repo, used by other people: everything user-facing is in English.
 
 ## Commands
 
@@ -19,10 +19,11 @@ The `pre-commit` hook (`scripts/hooks/`, enabled by `npm install`) runs `check` 
 
 ## Files
 
-- `src/index.ts`: CLI dispatch (`install`, `login`, `status`, `watch`…), then the MCP server: instructions, the 6 tools, the update-notice wrapper.
-- `src/auth.ts`: OAuth with Beeper (PKCE, dynamic registration), `getToken`, `status`.
+- `src/index.ts`: CLI dispatch (`install`, `login`, `status`, `watch`…), then the MCP server: token renewal (expiry or 401 → approve again in Beeper, same scope, retried once; a token approved during this run is never asked for again), instructions, the 10 tools, the wrapper that adds the update and token-expiry notices.
+- `src/auth.ts`: OAuth with Beeper (PKCE, dynamic registration), `getToken`, `tokenExpiry` (tokens last 30 days), `savedScope` (a renewal asks for the same access level, never more), `status`.
 - `src/secret-store.ts`: token in macOS Keychain / Windows DPAPI / Linux Secret Service, fallback file 0600; moves a file token into a keyring once one exists.
 - `src/install.ts`: adds/removes the server in 8 MCP clients (JSON, VS Code `servers`, Codex TOML, Claude Code CLI).
+- `src/messages.ts`: compact one-line view of messages and reactions for the agent (`get_new_messages`, `get_reactions`).
 - `src/listen.ts`: Beeper WebSocket (`/v1/ws`) + history, shared by `watch` and `wait_for_message`.
 - `src/watch.ts`: `watch` command (also the `beeper-watch` bin). `src/video.ts`: ffprobe check + ffmpeg conversion. `src/update.ts`: once-a-day update notice. `src/media.ts`: `beeper-mcp://` URIs, `safeFileName` (sender-chosen attachment names), `WORK_DIR` (per-user folder for downloads and converted videos: `~/.cache/beeper-mcp-addon` on Linux), `clip` (limits text from outside).
 - `manifest.json`: Claude Desktop `.mcpb` (`npm run bundle`). `server.json`: MCP registry entry.
@@ -49,6 +50,11 @@ The `pre-commit` hook (`scripts/hooks/`, enabled by `npm install`) runs `check` 
 - `send` returns a `pendingMessageID` (`~…`), which can't be deleted: get the final ID from the chat or `wait_for_message`.
 - `DELETE` returns 204 with an empty body. `/assets/upload` needs the MIME type, or videos arrive as generic files.
 - `wait_for_message` with `since` returns the **oldest** match after that time.
+- Tokens last **30 days** and can't be refreshed (`grant_types_supported: authorization_code` only). `GET /oauth/userinfo` gives `exp`.
+- Message text is light HTML (`<p>`, `<br>`, mentions as `<a href="https://matrix.to/#/…">Name</a>`): `plainText()` in `messages.ts` cleans it.
+- `GET /v1/messages/search` accepts `limit` ≤ 20 (more → "400 Invalid input"); `mediaTypes` has no `audio`. `/chats/search` `query` matches words of the title.
+- Reactions carry a `participantID` only: names come from the chat's participants (`GET /v1/chats/{id}?maxParticipantCount=500`). Reaction events also appear as messages of type `REACTION`; skip them.
+- Many group chats are muted: don't exclude muted chats by default.
 
 ## Reviews (before ending a turn)
 
@@ -57,7 +63,7 @@ A `Stop` hook (`node scripts/review-state.mjs stop-hook`, in `.claude/settings.j
 | Review | Agent file | Model | Scope |
 |---|---|---|---|
 | docs | `.agents/agents/doc-reviewer.md` | sonnet | `src/`, README, AGENTS.md, `docs/`, manifest, server.json, package.json |
-| security | `.agents/agents/security-reviewer.md` | opus | auth, secret store, install, update, listen, media, tools, video, dependencies, workflows, hooks |
+| security | `.agents/agents/security-reviewer.md` | opus | auth, secret store, install, update, listen, watch, media, messages, tools, video, dependencies, workflows, hooks |
 
 Give the subagent only its task ("Review the current changes"), not your conclusions. Fix what it reports and run it again; it records its own pass (`review-state.mjs pass <review>`). Don't record a pass yourself. `release-notes-reviewer.md` runs during `/release`.
 

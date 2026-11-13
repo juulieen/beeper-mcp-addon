@@ -68,6 +68,22 @@ try {
   if (!e.path.includes("beeper-mcp-addon") || e.path.includes("..")) throw new Error(`unsafe download path: ${e.path}`);
   step(`download_attachment keeps a hostile file name in the download folder (${e.path})`);
 
+  // Reactions, edit, and catching up, on the first test message.
+  await call("react", { chatID, messageID: a.messageID, reaction: "👍" });
+  await new Promise((r) => setTimeout(r, 1500));
+  const reacted = await call("get_reactions", { chatID, messageID: a.messageID });
+  if (!reacted.reactions.some((r) => r.reaction === "👍" && r.people.includes("[me]"))) throw new Error(`reaction not seen: ${JSON.stringify(reacted)}`);
+  await call("react", { chatID, messageID: a.messageID, reaction: "👍", remove: true });
+  step("react adds and removes a reaction; get_reactions names who reacted");
+
+  const edited = "beeper-mcp-addon live test: file (edited)";
+  await call("edit_message", { chatID, messageID: a.messageID, text: edited });
+  await new Promise((r) => setTimeout(r, 1500));
+  const news = await call("get_new_messages", { since: new Date(Date.now() - 10 * 60_000).toISOString(), chatIDs: [chatID] });
+  const lines = news.chats[0]?.messages ?? [];
+  if (!lines.some((l) => l.includes(`#${a.messageID}`) && l.includes(edited))) throw new Error(`edit not seen in get_new_messages: ${JSON.stringify(news)}`);
+  step("edit_message changes the text; get_new_messages shows it");
+
   if (spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status === 0) {
     const video = join(dir, "pixel.mp4");
     spawnSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=60:duration=1",

@@ -3,8 +3,8 @@
   "name": "beeper-mcp-addon",
   "display_name": "Beeper MCP Addon",
   "version": "0.3.1",
-  "description": "Files and new conversations for Beeper's MCP: download and send attachments, find contacts, start chats.",
-  "long_description": "Unofficial companion to Beeper Desktop's built-in MCP server. Adds download_attachment, send_file (with automatic video conversion when ffmpeg is installed), search_contacts, start_chat, delete_message and wait_for_message on top of the local Beeper Client API. On first use it opens Beeper so you can approve access; the token is kept in your system keychain.",
+  "description": "Files, new chats, catching up, reactions and edits for Beeper's MCP.",
+  "long_description": "Unofficial companion to Beeper Desktop's built-in MCP server. Adds download_attachment, send_file (with automatic video conversion when ffmpeg is installed), search_contacts, start_chat, delete_message, wait_for_message, get_new_messages (catch up on many chats in one compact call), get_reactions, react and edit_message on top of the local Beeper Client API. On first use it opens Beeper so you can approve access; the token is kept in your system keychain.",
   "author": {
     "name": "juulieen",
     "url": "https://github.com/juulieen"
@@ -59,6 +59,22 @@
     {
       "name": "delete_message",
       "description": "Delete (unsend) a message"
+    },
+    {
+      "name": "get_new_messages",
+      "description": "Catch up on everything new since a given time, across chats, in one compact call"
+    },
+    {
+      "name": "get_reactions",
+      "description": "See who reacted to a message, by name"
+    },
+    {
+      "name": "react",
+      "description": "Add or remove an emoji reaction"
+    },
+    {
+      "name": "edit_message",
+      "description": "Change the text of a message you sent"
     }
   ],
   "user_config": {

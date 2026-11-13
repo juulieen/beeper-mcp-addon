@@ -24,7 +24,7 @@ export const REVIEWS = {
     agent: "security-reviewer",
     why: "token handling, client configs, tools that act for the user, dependencies or CI changed",
     scope: (f) =>
-      /^(src\/(auth|secret-store|install|update|listen|index|video|media)\.ts$|package(-lock)?\.json$|\.github\/workflows\/|scripts\/hooks\/)/.test(f),
+      /^(src\/(auth|secret-store|install|update|listen|index|video|media|messages|watch)\.ts$|package(-lock)?\.json$|\.github\/workflows\/|scripts\/hooks\/)/.test(f),
   },
 };
 

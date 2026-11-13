@@ -61,7 +61,15 @@ try {
   await client.api("/accounts");
 } catch (err) {
   const msg = err instanceof Error ? err.message : String(err);
-  console.error(`beeper-watch: ${msg === "fetch failed" ? `cannot reach Beeper at ${BASE_URL}. Is Beeper Desktop running with the API enabled?` : msg}`);
+  console.error(
+    `beeper-watch: ${
+      msg === "fetch failed"
+        ? `cannot reach Beeper at ${BASE_URL}. Is Beeper Desktop running with the API enabled?`
+        : msg.startsWith("Beeper API 401")
+          ? "Beeper refused the token: it expired (tokens last 30 days) or was revoked. Run `beeper-mcp-addon login` to approve access again."
+          : msg
+    }`,
+  );
   process.exit(1);
 }
 
