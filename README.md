@@ -4,6 +4,10 @@
 
 The missing tools for [Beeper Desktop](https://www.beeper.com)'s MCP server: files, new conversations, catching up, reactions and edits.
 
+![Demo: an assistant catches up on three chats with get_new_messages, then saves one chat's photos and video with download_attachment](https://raw.githubusercontent.com/juulieen/beeper-mcp-addon/master/docs/demo.gif)
+
+<sub>Example with made-up chats.</sub>
+
 Beeper Desktop ships a built-in MCP server, so an AI assistant can search and send messages across WhatsApp, Signal, Telegram, iMessage and more. It has a few gaps, though:
 
 - It only handles **text**: the assistant can see that a message holds a video, but it can't open it, and it can't send a photo or a PDF.
