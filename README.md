@@ -29,7 +29,7 @@ The Beeper Client API that runs alongside it already supports all of that. This 
 | `react` | Adds or removes an emoji reaction |
 | `edit_message` | Changes the text of a message you sent, while the network allows it |
 
-It runs **next to** the official Beeper MCP, not instead of it. Keep using the official server for search, chats and text messages.
+It runs **next to** the official Beeper MCP, not instead of it. Keep using the official server for search, chats and text messages (including replies to a specific message).
 
 ## Requirements
 
