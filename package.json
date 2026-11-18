@@ -1,6 +1,6 @@
 {
   "name": "beeper-mcp-addon",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Bulk chat media, large files, catch-up, who reacted and waiting for replies for Beeper's MCP (unofficial companion to Beeper Desktop's MCP)",
   "main": "dist/index.js",
   "scripts": {

@@ -2,7 +2,7 @@
   "manifest_version": "0.2",
   "name": "beeper-mcp-addon",
   "display_name": "Beeper MCP Addon",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Bulk chat media, large files, catch-up, who reacted and waiting for replies for Beeper's MCP.",
   "long_description": "Unofficial companion to Beeper Desktop's built-in MCP server (4.3.326 or later). Adds download_attachment (every photo and video of a chat over a period, or one file), send_file (a local file by path, up to 500 MB, with automatic video conversion when ffmpeg is installed), wait_for_message, get_new_messages (catch up on many chats in one compact call) and get_reactions (who reacted, by name) on top of the local Beeper Client API. On first use it opens Beeper so you can approve access; the token is kept in your system keychain.",
   "author": {
