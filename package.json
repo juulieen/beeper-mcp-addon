@@ -1,7 +1,7 @@
 {
   "name": "beeper-mcp-addon",
   "version": "0.5.2",
-  "description": "Files, new chats, catching up, reactions and edits for Beeper's MCP (unofficial companion to Beeper Desktop's MCP)",
+  "description": "Bulk chat media, large files, catch-up, who reacted and waiting for replies for Beeper's MCP (unofficial companion to Beeper Desktop's MCP)",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -21,8 +21,7 @@
     "model-context-protocol",
     "whatsapp",
     "attachments",
-    "claude",
-    "contacts"
+    "claude"
   ],
   "license": "MIT",
   "type": "module",

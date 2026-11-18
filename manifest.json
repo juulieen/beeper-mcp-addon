@@ -3,8 +3,8 @@
   "name": "beeper-mcp-addon",
   "display_name": "Beeper MCP Addon",
   "version": "0.5.2",
-  "description": "Files, new chats, catching up, reactions and edits for Beeper's MCP.",
-  "long_description": "Unofficial companion to Beeper Desktop's built-in MCP server. Adds download_attachment (one file, or every photo and video of a chat over a period), send_file (with automatic video conversion when ffmpeg is installed), search_contacts, start_chat, delete_message, wait_for_message, get_new_messages (catch up on many chats in one compact call), get_reactions, react and edit_message on top of the local Beeper Client API. On first use it opens Beeper so you can approve access; the token is kept in your system keychain.",
+  "description": "Bulk chat media, large files, catch-up, who reacted and waiting for replies for Beeper's MCP.",
+  "long_description": "Unofficial companion to Beeper Desktop's built-in MCP server (4.3.326 or later). Adds download_attachment (every photo and video of a chat over a period, or one file), send_file (a local file by path, up to 500 MB, with automatic video conversion when ffmpeg is installed), wait_for_message, get_new_messages (catch up on many chats in one compact call) and get_reactions (who reacted, by name) on top of the local Beeper Client API. On first use it opens Beeper so you can approve access; the token is kept in your system keychain.",
   "author": {
     "name": "juulieen",
     "url": "https://github.com/juulieen"
@@ -45,20 +45,8 @@
       "description": "Send a local file to a chat"
     },
     {
-      "name": "search_contacts",
-      "description": "Find people on an account, including new contacts"
-    },
-    {
-      "name": "start_chat",
-      "description": "Open a direct chat with someone and return its chatID"
-    },
-    {
       "name": "wait_for_message",
       "description": "Wait for an incoming message (e.g. a reply) instead of polling"
-    },
-    {
-      "name": "delete_message",
-      "description": "Delete (unsend) a message"
     },
     {
       "name": "get_new_messages",
@@ -67,14 +55,6 @@
     {
       "name": "get_reactions",
       "description": "See who reacted to a message, by name"
-    },
-    {
-      "name": "react",
-      "description": "Add or remove an emoji reaction"
-    },
-    {
-      "name": "edit_message",
-      "description": "Change the text of a message you sent"
     }
   ],
   "user_config": {

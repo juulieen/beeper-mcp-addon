@@ -12,6 +12,15 @@ import { BASE_URL, getToken } from "../dist/auth.js";
 const token = await getToken();
 if (!token) throw new Error("Not logged in: run `node dist/index.js login` first.");
 const rest = async (path) => (await fetch(`${BASE_URL}/v1${path}`, { headers: { Authorization: `Bearer ${token}` } })).json();
+// Reacting, editing and deleting are the official MCP's tools now: the test does them through the API directly.
+const restWrite = async (method, path, body) => {
+  const res = await fetch(`${BASE_URL}/v1${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!res.ok) throw new Error(`${method} ${path}: ${res.status}`);
+};
 
 let chatID = process.env.BEEPER_TEST_CHAT;
 if (!chatID) {
@@ -80,21 +89,22 @@ try {
   if (b2.saved !== 0 || b2.alreadySaved !== b1.saved) throw new Error(`batch download again: ${JSON.stringify(b2)}`);
   step(`download_attachment batch saves a period into one folder (${b1.saved} files), and skips them the second time`);
 
-  // Reactions, edit, and catching up, on the first test message.
-  await call("react", { chatID, messageID: a.messageID, reaction: "👍" });
+  // Reactions and catching up, on the first test message.
+  const reactionsPath = `/chats/${encodeURIComponent(chatID)}/messages/${a.messageID}/reactions`;
+  await restWrite("POST", reactionsPath, { reactionKey: "👍" });
   await new Promise((r) => setTimeout(r, 1500));
   const reacted = await call("get_reactions", { chatID, messageID: a.messageID });
   if (!reacted.reactions.some((r) => r.reaction === "👍" && r.people.includes("[me]"))) throw new Error(`reaction not seen: ${JSON.stringify(reacted)}`);
-  await call("react", { chatID, messageID: a.messageID, reaction: "👍", remove: true });
-  step("react adds and removes a reaction; get_reactions names who reacted");
+  await restWrite("DELETE", `${reactionsPath}/${encodeURIComponent("👍")}`);
+  step("get_reactions names who reacted");
 
   const edited = "beeper-mcp-addon live test: file (edited)";
-  await call("edit_message", { chatID, messageID: a.messageID, text: edited });
+  await restWrite("PUT", `/chats/${encodeURIComponent(chatID)}/messages/${a.messageID}`, { text: edited });
   await new Promise((r) => setTimeout(r, 1500));
   const news = await call("get_new_messages", { since: new Date(Date.now() - 10 * 60_000).toISOString(), chatIDs: [chatID] });
   const lines = news.chats[0]?.messages ?? [];
   if (!lines.some((l) => l.includes(`#${a.messageID}`) && l.includes(edited))) throw new Error(`edit not seen in get_new_messages: ${JSON.stringify(news)}`);
-  step("edit_message changes the text; get_new_messages shows it");
+  step("get_new_messages shows an edited message's new text");
 
   if (spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status === 0) {
     const video = join(dir, "pixel.mp4");
@@ -105,11 +115,11 @@ try {
     step(`send_file converts a phone-style video (${v.reasons.join(", ")})`);
   } else console.log("- video conversion skipped (no ffmpeg)");
 } finally {
-  for (const messageID of sent) await call("delete_message", { chatID, messageID }).catch((e) => console.error(`✗ cleanup ${messageID}: ${e.message}`));
+  for (const messageID of sent) await restWrite("DELETE", `/chats/${encodeURIComponent(chatID)}/messages/${messageID}?forEveryone=true`).catch((e) => console.error(`✗ cleanup ${messageID}: ${e.message}`));
   await new Promise((r) => setTimeout(r, 1500));
   const left = [];
   for (const id of sent) if (!(await rest(`/chats/${encodeURIComponent(chatID)}/messages/${id}`)).isDeleted) left.push(id);
   if (left.length) console.error(`✗ not deleted: ${left.join(", ")}`);
-  else if (sent.length) step(`delete_message cleaned up ${sent.length} test message(s)`);
+  else if (sent.length) step(`cleaned up ${sent.length} test message(s)`);
   await client.close();
 }

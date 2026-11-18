@@ -1,6 +1,6 @@
 # beeper-mcp-addon — notes for agents
 
-MCP server published on npm that adds what Beeper Desktop's built-in MCP lacks: files, new chats, catching up on many chats, reactions, editing, deleting and waiting for messages. It runs **next to** the official Beeper MCP and only talks to Beeper Desktop's local Client API (`http://localhost:23373`, OpenAPI at `/v1/spec`). Public repo, used by other people: everything user-facing is in English.
+MCP server published on npm that adds what Beeper Desktop's built-in MCP (4.3.326+) still lacks: batch media downloads, large files by path with phone-video fixes, catching up on many chats, who reacted by name, and waiting for messages. Tools the official MCP now has (contacts, new chats, react, edit, delete) were removed: don't add them back. It runs **next to** the official Beeper MCP and only talks to Beeper Desktop's local Client API (`http://localhost:23373`, OpenAPI at `/v1/spec`). Public repo, used by other people: everything user-facing is in English.
 
 ## Commands
 
@@ -19,7 +19,7 @@ The `pre-commit` hook (`scripts/hooks/`, enabled by `npm install`) runs `check` 
 
 ## Files
 
-- `src/index.ts`: CLI dispatch (`install`, `login`, `status`, `watch`…), then the MCP server: token renewal (expiry or 401 → approve again in Beeper, same scope, retried once; a token approved during this run is never asked for again), instructions, the 10 tools, the wrapper that adds the update and token-expiry notices.
+- `src/index.ts`: CLI dispatch (`install`, `login`, `status`, `watch`…), then the MCP server: token renewal (expiry or 401 → approve again in Beeper, same scope, retried once; a token approved during this run is never asked for again), instructions, the 5 tools, the wrapper that adds the update and token-expiry notices.
 - `src/auth.ts`: OAuth with Beeper (PKCE, dynamic registration), `getToken`, `tokenInfo` / `tokenExpiry` (expiry and scope from `/oauth/userinfo`; tokens last 30 days), `savedScope` (a renewal asks for the same access level, never more; a token saved without its scope gets it from `tokenInfo` while it still works), `status`.
 - `src/secret-store.ts`: token in macOS Keychain / Windows DPAPI / Linux Secret Service, fallback file 0600; moves a file token into a keyring once one exists.
 - `src/install.ts`: adds/removes the server in 8 MCP clients (JSON, VS Code `servers`, Codex TOML, Claude Code CLI).

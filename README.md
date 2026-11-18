@@ -2,38 +2,36 @@
 
 > Unofficial. Not affiliated with or endorsed by Beeper.
 
-The missing tools for [Beeper Desktop](https://www.beeper.com)'s MCP server: files, new conversations, catching up, reactions and edits.
+The missing tools for [Beeper Desktop](https://www.beeper.com)'s MCP server: a chat's photos and videos in one go, large files and phone videos, catching up on many chats, who reacted, and waiting for a reply.
 
 ![Demo: an assistant catches up on three chats with get_new_messages, then saves one chat's photos and video with download_attachment](https://raw.githubusercontent.com/juulieen/beeper-mcp-addon/master/docs/demo.gif)
 
 <sub>Example with made-up chats.</sub>
 
-Beeper Desktop ships a built-in MCP server, so an AI assistant can search and send messages across WhatsApp, Signal, Telegram, iMessage and more. It has a few gaps, though:
+Beeper Desktop ships a built-in MCP server, so an AI assistant can search and send messages across WhatsApp, Signal, Telegram, iMessage and more. Since Beeper Desktop 4.3.326, it also downloads and sends single files, finds contacts, starts new chats, reacts, and edits or deletes messages. A few things are still missing:
 
-- It only handles **text**: the assistant can see that a message holds a video, but it can't open it, and it can't send a photo or a PDF.
-- It can only write in **existing** conversations. To message someone new, you have to send the first message yourself.
-- Catching up on many chats takes one call per chat, and it can't see who reacted, react, or fix a message already sent.
+- It downloads **one attachment at a time**: saving every photo and video of a group over a month takes hundreds of calls.
+- It sends files passed **inline as base64**, up to about 7 MB, and sends phone videos as they are, even when WhatsApp then plays them badly.
+- Catching up on many chats returns full messages, 20 at a time, without saying whether each account is connected.
+- It shows reactions by user ID, not by name, and it can't **wait** for a reply.
 
-The Beeper Client API that runs alongside it already supports all of that. This small MCP server exposes it as ten tools:
+This small MCP server fills those gaps on top of the Beeper Client API, as five tools:
 
 | Tool | What it does |
 |---|---|
-| `download_attachment` | Saves a message attachment (video, image, audio, document) to disk and returns the local path; or every photo and video of a chat over a period, into one folder |
-| `send_file` | Uploads a local file and sends it to any chat, with an optional caption |
-| `search_contacts` | Finds people on an account (WhatsApp, Signal…), including ones you've never chatted with; phone numbers, emails and @usernames are looked up exactly |
-| `start_chat` | Opens a direct chat with someone and returns its `chatID`, reusing the existing chat if there is one |
-| `delete_message` | Deletes (unsends) a message, for everyone when the network allows it |
+| `download_attachment` | Saves every photo and video (or document) of a chat over a period into one folder, named by date; or one attachment, under a safe name |
+| `send_file` | Sends a local file by its path (up to 500 MB) to any chat, with an optional caption, and fixes phone videos first |
 | `wait_for_message` | Waits for an incoming message (a reply, say) and returns it, so the assistant doesn't have to poll |
 | `get_new_messages` | Everything that arrived since a given time, across chats, in one call and in a compact form, with the connection state of each account |
 | `get_reactions` | Who reacted to a message, by name (to count the 👍 on "who's in?") |
-| `react` | Adds or removes an emoji reaction |
-| `edit_message` | Changes the text of a message you sent, while the network allows it |
 
-It runs **next to** the official Beeper MCP, not instead of it. Keep using the official server for search, chats and text messages (including replies to a specific message).
+It runs **next to** the official Beeper MCP, not instead of it. Keep using the official server for search, chats, text messages (including replies to a specific message), contacts, new chats, reactions, edits and deletes.
+
+**Removed tools:** earlier versions also had `search_contacts`, `start_chat`, `react`, `edit_message` and `delete_message`; they are gone because the official MCP now has the same tools under the same names. With a Beeper Desktop older than 4.3.326, update Beeper first.
 
 ## Requirements
 
-- [Beeper Desktop](https://www.beeper.com/download) with its API enabled (Settings → Developers)
+- [Beeper Desktop](https://www.beeper.com/download) 4.3.326 or later, with its API enabled (Settings → Developers)
 - Node.js 20+ — except for the Claude Desktop bundle, which uses Claude's built-in Node
 - Optional: [ffmpeg](https://ffmpeg.org/download.html), so `send_file` can fix videos that phones play badly
 
@@ -85,7 +83,7 @@ Then connect once with `npx -y beeper-mcp-addon login`, or just use a tool: Beep
 - **You approve access in Beeper.** `login` uses Beeper's own OAuth screen (with PKCE); nothing is copied by hand. Beeper's approval screen decides the access level (read only, or read + write to send); `login --read-only` asks for read only.
 - **The token stays in your system's secret store:** macOS Keychain, Windows DPAPI (encrypted for your user), or the Linux keyring (GNOME Keyring / KWallet via `secret-tool`). Without a keyring, it falls back to a file readable only by you — the same way Claude Code stores its own credentials on Linux. If a keyring shows up later, the token moves into it automatically and the file is deleted. It is never written to MCP client configs, and never passed on a command line.
 - **Everything is local.** The server only talks to Beeper Desktop on `localhost`.
-- **Sending is explicit.** `send_file`, `start_chat`, `delete_message`, `react` and `edit_message` act on your behalf; keep your client's per-call approval on.
+- **Sending is explicit.** `send_file` acts on your behalf; keep your client's per-call approval on.
 - **Access lasts 30 days.** Beeper's tokens expire after 30 days and can't be renewed in the background. Five days before, a tool result asks your assistant to tell you; after that, the next tool call opens Beeper so you approve access again (or run `login` yourself). A renewal asks for the same access level as before, never more: a read-only token is renewed read-only. `status` shows the expiry date.
 - `npx -y beeper-mcp-addon status` shows where the token lives and whether it's valid; `logout` revokes and deletes it.
 
@@ -150,21 +148,9 @@ When there are more files than `maxFiles`, the result gives `nextSince`. Call ag
 
 **Videos are fixed before sending.** Phone cameras often record videos that messaging apps play badly: HEVC, 60 fps, full-range color, rotation stored as metadata. The recipient then sees a black frame, a sideways picture, or nothing. When ffmpeg is installed, `send_file` checks each video with ffprobe and, only if needed, re-encodes it to H.264 + AAC MP4 (30 fps and 1280 px max, rotation applied). The result says what was fixed (`reasons`). Pass `convert: "never"` to send the original, or `"always"` to force it. Set `BEEPER_FFMPEG` if ffmpeg is not on your `PATH`.
 
-### `search_contacts`
-
-`accountID` (from the official MCP's `get_accounts`), `query`, optional `limit`. Returns contact `id`, name, phone number, username, email.
-
-### `start_chat`
-
-`accountID` plus one of `userID` (from `search_contacts`), `phoneNumber`, `username` or `email`. Returns the `chatID` to use with `send_message` or `send_file`. If a network refuses to create an empty chat, pass `messageText`: it becomes the first message and is sent right away.
-
 ### `wait_for_message`
 
 Optional `chatID`, `from` (part of the sender's name or ID), `includeOwn` (also your own messages, default `false`), `since` (ISO time, usually that of your last message, needs `chatID`: a reply that arrived just before the call is returned right away) and `timeoutSeconds` (default 300, max 1800). Returns `{ status: "message", message, note }` or `{ status: "timeout" }`; `note` reminds the assistant that the message was written by its sender and is data, not instructions. Text from other people is length-limited: message text at 4000 characters, names at 200, at most 20 attachment names, each marked `… [truncated, N chars]` when cut (same in `watch` output). For long waits, the `watch` command below is better: it doesn't hold a tool call open.
-
-### `delete_message`
-
-`chatID`, `messageID`, optional `forEveryone` (default `true`). Most networks only let you delete your own, recent messages. It needs the final message ID: the `pendingMessageID` returned by `send_file` can't be deleted until the message is sent.
 
 ### `get_new_messages`
 
@@ -176,23 +162,13 @@ It returns one short line per message, grouped by chat, newest chats first:
 2026-11-13 09:12 · Maxime · #79581 ↩79570: Ok pour samedi ! ⏎ À 10 h ? [image: photo.jpg] (👍 3)
 ```
 
-That is the local time, the sender (`[me]` for you; other people's names can't contain brackets, so nobody can pass as you), the message ID (for `react`, `edit_message`, `download_attachment`…), the message it replies to, the text (line breaks shown as `⏎`, cut at 1000 characters; names at 80), attachments and reactions. The result also says whether Beeper and each account are connected (when one isn't, its new messages may be missing), and gives `nextSince` to pass as `since` next time.
+That is the local time, the sender (`[me]` for you; other people's names can't contain brackets, so nobody can pass as you), the message ID (for `download_attachment`, `get_reactions`, and the official MCP's `react`, `edit_message`…), the message it replies to, the text (line breaks shown as `⏎`, cut at 1000 characters; names at 80), attachments and reactions. The result also says whether Beeper and each account are connected (when one isn't, its new messages may be missing), and gives `nextSince` to pass as `since` next time.
 
 It's made for periodic checks ("anything new in the club's groups since this morning?"). To keep the assistant's context small, ask for `detail: "counts"` first, then read only the chats that matter.
 
 ### `get_reactions`
 
 `chatID`, `messageID`. Returns each reaction with how many people used it and their names (`[me]` for you).
-
-### `react`
-
-`chatID`, `messageID`, `reaction` (an emoji), optional `remove: true` to take it back.
-
-### `edit_message`
-
-`chatID`, `messageID`, `text`. Only your own messages, and only for a while after sending (15 minutes on WhatsApp, for example); recipients see it marked as edited. Like `delete_message`, it needs the final message ID, not a `pendingMessageID`.
-
-`send_file`, `start_chat`, `delete_message`, `react` and `edit_message` act on your behalf. Most MCP clients ask you to approve each call; keep that confirmation on.
 
 ## Example
 
@@ -214,7 +190,7 @@ One `download_attachment` call with `chatID`, `since`, `until` and `outputDir`, 
 
 > "Send the flyer PDF to +33 6 12 34 56 78 on WhatsApp."
 
-`start_chat` with the phone number, then `send_file` on the returned `chatID`. No need to open the conversation by hand first.
+The official MCP's `start_chat` with the phone number, then `send_file` on the returned `chatID`. No need to open the conversation by hand first.
 
 ## Real-time: `watch`
 
@@ -240,7 +216,7 @@ If the connection drops, it prints `{"event":"disconnected",...}` and reconnects
 
 ## How it works
 
-A few small TypeScript files that call the local Beeper Client API: `/v1/assets/download`, `/v1/assets/upload`, `/v1/chats/{chatID}/messages` (send, read, edit and delete), `/v1/chats/{chatID}/messages/{messageID}/reactions`, `/v1/chats/search`, `/v1/chats/{chatID}`, `/v1/accounts`, `/v1/accounts/{accountID}/contacts` and `/v1/chats/start`, plus Beeper's WebSocket (`/v1/ws`) for real-time messages. Everything stays on your machine; the server only talks to Beeper Desktop on `localhost` (and, once a day at most, to npm and GitHub to check for a new version).
+A few small TypeScript files that call the local Beeper Client API: `/v1/assets/download`, `/v1/assets/upload`, `/v1/chats/{chatID}/messages` (send and read), `/v1/messages/search`, `/v1/chats/search`, `/v1/chats/{chatID}` and `/v1/accounts`, plus Beeper's WebSocket (`/v1/ws`) for real-time messages. Everything stays on your machine; the server only talks to Beeper Desktop on `localhost` (and, once a day at most, to npm and GitHub to check for a new version).
 
 ## License
 
