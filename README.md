@@ -1,5 +1,7 @@
 # beeper-mcp-addon
 
+[![juulieen/beeper-mcp-addon MCP server](https://glama.ai/mcp/servers/juulieen/beeper-mcp-addon/badges/score.svg)](https://glama.ai/mcp/servers/juulieen/beeper-mcp-addon)
+
 > Unofficial. Not affiliated with or endorsed by Beeper.
 
 The missing tools for [Beeper Desktop](https://www.beeper.com)'s MCP server: a chat's photos and videos in one go, large files and phone videos, catching up on many chats, who reacted, and waiting for a reply.
